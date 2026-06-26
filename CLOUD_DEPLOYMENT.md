@@ -13,7 +13,7 @@
 
 在 Streamlit Community Cloud 建立 app：
 
-- Repository：`similaitw/teacher-appeal-local-ai`
+- Repository：`similaitw/teacher-appeal-public-app`
 - Branch：`main`
 - Main file path：`app/streamlit_app.py`
 - Python version：建議選 `3.11`

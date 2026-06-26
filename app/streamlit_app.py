@@ -57,7 +57,19 @@ from web_ai_batch import (  # noqa: E402
 from update_public_cases import UPDATE_RUNS_DIR  # noqa: E402
 
 BATCH_STATUS_SERVER_PORT = 8765
-APP_MODE = os.getenv("APP_MODE", "").strip().lower()
+
+
+def read_app_mode() -> str:
+    env_mode = os.getenv("APP_MODE", "").strip().lower()
+    if env_mode:
+        return env_mode
+    try:
+        return str(st.secrets.get("APP_MODE", "")).strip().lower()
+    except Exception:
+        return ""
+
+
+APP_MODE = read_app_mode()
 CLOUD_PUBLIC_MODE = APP_MODE == "cloud_public"
 
 st.set_page_config(page_title="教師申訴評議書本機查詢系統", layout="wide")
