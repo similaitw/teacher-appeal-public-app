@@ -13,15 +13,26 @@
 
 在 Streamlit Community Cloud 建立 app：
 
-- Repository：本專案 GitHub repo
-- Branch：主要部署分支
+- Repository：`similaitw/teacher-appeal-local-ai`
+- Branch：`main`
 - Main file path：`app/streamlit_app.py`
+- Python version：建議選 `3.11`
+- App URL：可自訂，例如 `teacher-appeal-local-ai`
 
 在 App secrets 或環境變數設定：
 
 ```toml
 APP_MODE = "cloud_public"
 ```
+
+部署操作：
+
+1. 開啟 `https://share.streamlit.io/` 並以 GitHub 帳號登入。
+2. 右上角選擇 `Create app`。
+3. 選擇 `Yup, I have an app`。
+4. 填入上方 Repository、Branch 與 Main file path。
+5. 點 `Advanced settings`，選擇 Python `3.11`，並在 Secrets 欄貼上 `APP_MODE = "cloud_public"`。
+6. 儲存後點 `Deploy`。
 
 若要使用較輕量的雲端依賴，可在部署分支將 `requirements-cloud.txt` 內容作為 `requirements.txt` 使用。本機完整功能仍建議保留原 `requirements.txt`。
 
