@@ -2,6 +2,11 @@
 .venv/
 __pycache__/
 *.pyc
+node_modules/
+.next/
+web/node_modules/
+web/.next/
+web/public/data/
 
 uploaded_cases/
 exports/
@@ -15,3 +20,5 @@ private_cases.db
 
 data/appeal_cases.db-wal
 data/appeal_cases.db-shm
+.vercel
+.env*
