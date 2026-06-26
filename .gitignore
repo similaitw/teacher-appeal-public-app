@@ -1,0 +1,17 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+
+uploaded_cases/
+exports/
+data/ai_exports/
+data/update_runs/
+data/*.log
+browser_profiles/
+private_cases.db
+*.db-wal
+*.db-shm
+
+data/appeal_cases.db-wal
+data/appeal_cases.db-shm

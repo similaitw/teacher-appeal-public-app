@@ -1,0 +1,11 @@
+requests
+beautifulsoup4
+pandas
+openpyxl
+streamlit
+python-dotenv
+lxml
+PyMuPDF
+python-docx
+pytest
+playwright
