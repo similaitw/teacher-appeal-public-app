@@ -63,7 +63,7 @@ def ensure_no_forbidden_tracked_files() -> None:
     forbidden = [
         path
         for path in files
-        if any(path == pattern or path.startswith(pattern) or f"/{pattern}" in path for pattern in FORBIDDEN_TRACKED_PATTERNS)
+        if any(path == pattern or path.startswith(f"{pattern}/") or f"/{pattern}/" in path for pattern in FORBIDDEN_TRACKED_PATTERNS)
     ]
     if forbidden:
         raise SystemExit("追蹤清單含不得上傳檔案：\n" + "\n".join(forbidden))
