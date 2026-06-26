@@ -383,6 +383,29 @@ CLOUD_DEPLOYMENT.md
 
 Streamlit Community Cloud 預設會讀取 `requirements.txt`。若要降低免費空間冷啟動與記憶體壓力，可在專門的雲端部署分支使用 `requirements-cloud.txt` 內容作為 `requirements.txt`；本機完整功能仍使用原本的 `requirements.txt`。
 
+## 同步 private 主 repo 與 public 部署 repo
+
+本機 Git 有兩個 remote：
+
+```txt
+origin         # private 主 repo：similaitw/teacher-appeal-local-ai
+public-deploy # public 部署 repo：similaitw/teacher-appeal-public-app
+```
+
+改完程式並 commit 後，先做 dry-run 檢查：
+
+```bash
+python scripts/sync_repos.py
+```
+
+確認通過後同步推送兩邊：
+
+```bash
+python scripts/sync_repos.py --push
+```
+
+同步腳本會檢查工作樹是否乾淨、兩個遠端是否存在、遠端是否有本機沒有的 commit、是否誤追蹤私人檔案，並執行語法檢查、pytest、健康檢查與公開資料一致性檢查。Streamlit Cloud 追蹤 public repo，因此推送 `public-deploy` 後線上站會自動重新部署。
+
 ## 匯入已去識別化真實評議書
 
 本版本新增私人案件資料庫，與公開評議書資料庫完全分開：

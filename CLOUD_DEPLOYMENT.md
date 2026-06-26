@@ -5,7 +5,8 @@
 ## 部署目標
 
 - Streamlit Community Cloud 執行 `app/streamlit_app.py`
-- GitHub 保存程式與公開資料
+- GitHub private 主 repo 保存完整工作版：`similaitw/teacher-appeal-local-ai`
+- GitHub public 部署 repo 保存可公開部署版：`similaitw/teacher-appeal-public-app`
 - GitHub Actions 定期執行公開資料更新
 - 私人案件、上傳原檔、瀏覽器 profile、ChatGPT/Gemini 自動化批次不放上雲端
 
@@ -100,3 +101,20 @@ python -m streamlit run app/streamlit_app.py
 python -m pytest
 python scripts/search_db.py 導師 --limit 5
 ```
+
+## 同步流程
+
+日常修改完成並 commit 後，使用同步腳本一次檢查並推送 private / public 兩個 repo：
+
+```bash
+python scripts/sync_repos.py
+python scripts/sync_repos.py --push
+```
+
+同步腳本會阻止以下風險：
+
+- 工作樹尚有未提交變更。
+- `origin` 或 `public-deploy` 缺失。
+- 遠端 `main` 有本機沒有的 commit。
+- 私人資料或本機快取被 Git 追蹤。
+- 公開資料 CSV / SQLite / HTML / TXT / downloaded 清單不一致。
