@@ -320,6 +320,27 @@ data/ai_exports/analysis_runs/<timestamp>_<provider>_<scope>/
 
 `input_manifest.json` 會記錄來源包路徑、案件 cid 或私人案件 UUID、來源檔案 SHA-256、prompt SHA-256、AI 回覆 SHA-256、模型名稱與分析時間。`citation_review.md` 是人工引用覆核範本，用來檢查 AI 是否引用不存在段落、是否把不同案件事實混用、是否把單方主張寫成認定事實。
 
+## 可能誤判風險稽核
+
+已下載公開案件與已保存 AI 分析結果可進行本機規則式稽核，輸出人工覆核用 HTML / CSV / JSON 報表。此功能只標示「可能誤判風險」與「需人工覆核」事項，不作成最終認定、懲處建議或正式法律結論。
+
+```bash
+python scripts/misjudgment_audit.py --all --html
+python scripts/misjudgment_audit.py --cid 114070228
+python scripts/misjudgment_audit.py --analysis-runs
+```
+
+預設輸出位置：
+
+```txt
+data/audit_reports/misjudgment/<timestamp>/
+  misjudgment_audit.html
+  misjudgment_audit.csv
+  misjudgment_audit.json
+```
+
+Streamlit「誤判風險稽核」頁籤可選擇全部案件、指定 cid、只掃 AI 分析結果，或依最近報表重掃高風險 cid，並提供報表下載與單項風險詳情。
+
 ## 健康檢查
 
 ```bash
@@ -339,6 +360,25 @@ streamlit run app/streamlit_app.py
 ```txt
 http://localhost:8501
 ```
+
+### 遠端操作與帳號權限
+
+Streamlit 工作台支援帳號與角色權限。首次啟動會建立 `admin`、`public`、`private` 三個帳號；預設密碼可用 `DEFAULT_APP_PASSWORD` 覆寫，若未設定則使用 `APP_PASSWORD`，最後才使用 `simisimi520`。正式遠端開放後，請先用 `admin` 登入右上角「帳號與權限」，到「帳號管理」重設密碼。
+
+角色權限：
+
+- `public`：公開搜尋、公開案件閱讀、公開 AI 上傳包。
+- `private`：私人案件、文件匯入、Codex 分析包、AI 分析結果、ChatGPT/Gemini 網頁批次、公開資料更新、誤判風險稽核與資安檢查。
+- `admin`：包含所有私人功能，並可管理帳號。
+
+PowerShell 範例：
+
+```powershell
+$env:DEFAULT_APP_PASSWORD="請改成強密碼"
+python -m streamlit run app/streamlit_app.py --server.address 0.0.0.0 --server.port 8501
+```
+
+帳號資料會以 PBKDF2 雜湊保存在 `data/auth_users.json`。遠端開放前請確認 `data/auth_users.json`、`private_cases.db`、`uploaded_cases/`、`exports/`、`data/ai_exports/` 與 `browser_profiles/` 不會提交到公開 repo；目前 `.gitignore` 已排除這些私人資料。
 
 介面支援關鍵字、cid、年度、案件類型與結果篩選，並可顯示全文、匯出 Excel、產生 AI 分析包、監控批次分析與查看歸檔結果。
 

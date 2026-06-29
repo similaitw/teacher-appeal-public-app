@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import hmac
+import hashlib
 import os
+import secrets
 import socket
 import sqlite3
 import subprocess
@@ -55,6 +58,15 @@ from web_ai_batch import (  # noqa: E402
     write_batch_manifest,
 )
 from update_public_cases import UPDATE_RUNS_DIR  # noqa: E402
+from misjudgment_audit import (  # noqa: E402
+    AUDIT_REPORTS_DIR,
+    AuditFinding,
+    audit_interpretation_steps,
+    create_audit_report,
+    highlighted_excerpt_html,
+    list_audit_reports,
+    read_audit_report,
+)
 
 BATCH_STATUS_SERVER_PORT = 8765
 
@@ -71,6 +83,21 @@ def read_app_mode() -> str:
 
 APP_MODE = read_app_mode()
 CLOUD_PUBLIC_MODE = APP_MODE == "cloud_public"
+
+
+def read_secret_value(name: str) -> str:
+    value = os.getenv(name, "").strip()
+    if value:
+        return value
+    try:
+        return str(st.secrets.get(name, "")).strip()
+    except Exception:
+        return ""
+
+
+AUTH_USERS_PATH = ROOT_DIR / "data" / "auth_users.json"
+DEFAULT_APP_PASSWORD = read_secret_value("DEFAULT_APP_PASSWORD") or read_secret_value("APP_PASSWORD") or "simisimi520"
+AUTH_ENABLED = read_secret_value("AUTH_DISABLED").lower() not in {"1", "true", "yes"}
 
 st.set_page_config(page_title="教師申訴評議書本機查詢系統", layout="wide")
 
@@ -100,7 +127,7 @@ st.markdown(
     }
     .block-container {
         max-width: 1480px;
-        padding-top: .95rem;
+        padding-top: 2.25rem;
         padding-bottom: 4rem;
     }
     h1 {
@@ -181,6 +208,54 @@ st.markdown(
     div[data-testid="stAlert"] {
         border-radius: 6px;
         border: 1px solid rgba(216,211,200,.9);
+    }
+    .app-topbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 1rem;
+        align-items: start;
+        margin-bottom: .65rem;
+        padding-bottom: .7rem;
+        border-bottom: 2px solid var(--ink);
+    }
+    .app-title {
+        font-size: clamp(1.45rem, 2.35vw, 2.35rem);
+        font-weight: 850;
+        color: #18232d;
+        line-height: 1.18;
+        margin: 0;
+    }
+    .app-subtitle {
+        color: var(--muted);
+        margin-top: .25rem;
+        font-size: .95rem;
+        line-height: 1.45;
+    }
+    .auth-status {
+        text-align: right;
+        color: var(--muted);
+        font-size: .88rem;
+        padding-top: .25rem;
+        min-width: 160px;
+    }
+    .auth-status strong {
+        display: block;
+        color: var(--ink);
+        font-size: .95rem;
+    }
+    [data-testid="stSidebar"] {
+        background: #eee9dd;
+        border-right: 1px solid var(--line);
+    }
+    [data-testid="stSidebar"] [role="radiogroup"] label {
+        border: 1px solid transparent;
+        border-radius: 6px;
+        padding: .18rem .35rem;
+        margin-bottom: .2rem;
+    }
+    [data-testid="stSidebar"] [role="radiogroup"] label:hover {
+        background: rgba(255,253,248,.72);
+        border-color: rgba(216,211,200,.86);
     }
     .workflow-strip {
         display: grid;
@@ -772,11 +847,203 @@ def analysis_result_rows() -> list[dict[str, object]]:
     return rows
 
 
-st.title("教師申訴評議書本機查詢工作台")
-if CLOUD_PUBLIC_MODE:
-    st.caption("雲端公開版：提供公開評議書搜尋、閱讀與 AI 上傳包；私人案件與瀏覽器自動化批次已停用。")
-else:
-    st.caption("公開評議書搜尋、私人案件整理、ChatGPT / Gemini 批次分析與本機歸檔；正式引用前請回到來源全文覆核。")
+def hash_password(password: str, salt: str | None = None) -> dict[str, str]:
+    salt_value = salt or secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt_value.encode("utf-8"), 240000)
+    return {"salt": salt_value, "password_hash": digest.hex()}
+
+
+def verify_password(password: str, user: dict[str, object]) -> bool:
+    salt = str(user.get("salt") or "")
+    expected = str(user.get("password_hash") or "")
+    if not salt or not expected:
+        return False
+    actual = hash_password(password, salt=salt)["password_hash"]
+    return hmac.compare_digest(actual, expected)
+
+
+def default_auth_users() -> list[dict[str, object]]:
+    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    defaults = [
+        ("admin", "系統管理員", "admin"),
+        ("public", "公開功能帳號", "public"),
+        ("private", "私人分析帳號", "private"),
+    ]
+    users: list[dict[str, object]] = []
+    for username, display_name, role in defaults:
+        payload = hash_password(DEFAULT_APP_PASSWORD)
+        users.append(
+            {
+                "username": username,
+                "display_name": display_name,
+                "role": role,
+                "active": True,
+                "created_at": now,
+                "updated_at": now,
+                **payload,
+            }
+        )
+    return users
+
+
+def load_auth_users() -> list[dict[str, object]]:
+    AUTH_USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if not AUTH_USERS_PATH.exists():
+        save_auth_users(default_auth_users())
+    try:
+        payload = json.loads(AUTH_USERS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        payload = {"users": default_auth_users()}
+        AUTH_USERS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    users = payload.get("users", []) if isinstance(payload, dict) else []
+    return users if isinstance(users, list) else []
+
+
+def save_auth_users(users: list[dict[str, object]]) -> None:
+    AUTH_USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": 1,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "users": users,
+    }
+    AUTH_USERS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def find_auth_user(username: str) -> dict[str, object] | None:
+    normalized = username.strip().lower()
+    for user in load_auth_users():
+        if str(user.get("username", "")).strip().lower() == normalized:
+            return user
+    return None
+
+
+def current_user() -> dict[str, object] | None:
+    user = st.session_state.get("auth_user")
+    return user if isinstance(user, dict) else None
+
+
+def current_access_level() -> str:
+    user = current_user()
+    if not user:
+        return "none"
+    return str(user.get("role") or "none")
+
+
+def render_auth_panel() -> None:
+    if not AUTH_ENABLED:
+        st.warning("帳號登入已停用。")
+        return
+
+    user = current_user()
+    if user:
+        role_label = {"public": "公開", "private": "私人分析", "admin": "管理員"}.get(str(user.get("role")), str(user.get("role") or ""))
+        with st.popover("帳號與權限", use_container_width=True):
+            st.write(f"登入帳號：{user.get('display_name') or user.get('username')}")
+            st.write(f"權限角色：{role_label}")
+            if st.button("登出", width="stretch"):
+                st.session_state.auth_user = None
+                st.rerun()
+        st.markdown(
+            f"""
+            <div class="auth-status">
+              <strong>{escape(str(user.get('display_name') or user.get('username') or '已登入'))}</strong>
+              {escape(role_label)}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        return
+
+    with st.popover("登入", use_container_width=True):
+        st.caption("預設帳號：admin / public / private；預設密碼：simisimi520")
+        username = st.text_input("帳號", key="auth_username")
+        password = st.text_input("密碼", type="password", key="auth_password")
+        if st.button("登入", width="stretch"):
+            auth_user = find_auth_user(username)
+            if auth_user and bool(auth_user.get("active", True)) and verify_password(password, auth_user):
+                st.session_state.auth_user = {
+                    "username": auth_user.get("username", ""),
+                    "display_name": auth_user.get("display_name", ""),
+                    "role": auth_user.get("role", "public"),
+                }
+                st.success("登入成功。")
+                st.rerun()
+            else:
+                st.error("帳號或密碼不正確，或帳號已停用。")
+    st.markdown(
+        """
+        <div class="auth-status">
+          <strong>尚未登入</strong>
+          請登入後使用工作台
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def has_public_access() -> bool:
+    if not AUTH_ENABLED:
+        return True
+    return current_access_level() in {"public", "private", "admin"}
+
+
+def has_private_access() -> bool:
+    if not AUTH_ENABLED:
+        return True
+    return current_access_level() in {"private", "admin"}
+
+
+def has_admin_access() -> bool:
+    if not AUTH_ENABLED:
+        return True
+    return current_access_level() == "admin"
+
+
+def require_public_access() -> bool:
+    if has_public_access():
+        return True
+    st.warning("請先以公開、私人或管理員帳號登入。")
+    return False
+
+
+def require_private_access() -> bool:
+    if has_private_access():
+        return True
+    st.warning("請先以私人或管理員帳號登入。")
+    return False
+
+
+def require_admin_access() -> bool:
+    if has_admin_access():
+        return True
+    st.warning("請先以管理員帳號登入。")
+    return False
+
+
+header_left, header_right = st.columns([1, 0.24], vertical_alignment="top")
+with header_left:
+    header_caption = (
+        "雲端公開版：提供公開評議書搜尋、閱讀與 AI 上傳包；私人案件與瀏覽器自動化批次已停用。"
+        if CLOUD_PUBLIC_MODE
+        else "公開評議書搜尋、私人案件整理、ChatGPT / Gemini 批次分析與本機歸檔；正式引用前請回到來源全文覆核。"
+    )
+    st.markdown(
+        f"""
+        <div class="app-topbar">
+          <div>
+            <div class="app-title">教師申訴評議書本機查詢工作台</div>
+            <div class="app-subtitle">{escape(header_caption)}</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+with header_right:
+    render_auth_panel()
+
+if AUTH_ENABLED and not has_public_access():
+    st.info("此工作台已啟用帳號密碼保護。請先在右上角登入後使用。")
+    st.stop()
 
 llm_config = get_ai_config()
 
@@ -790,23 +1057,55 @@ m4.metric("最後更新", str(stats["updated"])[:16])
 if not DB_PATH.exists():
     st.warning("尚未建立 data/appeal_cases.db。請先到「資料管理」重建資料庫。")
 
-tabs = st.tabs([
-    "總覽",
-    "公開評議書搜尋",
-    "公開案件閱讀",
-    "資料管理",
-    "公開 AI 分析包",
-    "資安檢查",
-    "私人案件管理",
-    "匯入案件文件",
-    "案件文件閱讀",
-    "Codex 分析資料",
-    "AI 分析結果",
-    "批次儀表板",
-    "公開資料更新",
-])
+PAGE_GROUPS = [
+    ("公開資料", ["總覽", "公開評議書搜尋", "公開案件閱讀", "公開 AI 分析包"]),
+    ("資料維護", ["資料管理", "公開資料更新", "資安檢查"]),
+    ("私人案件", ["私人案件管理", "匯入案件文件", "案件文件閱讀", "Codex 分析資料"]),
+    ("分析覆核", ["AI 分析結果", "批次儀表板", "誤判風險稽核"]),
+    ("系統", ["帳號管理"]),
+]
 
-with tabs[0]:
+page_access = {
+    "資料管理": "private",
+    "公開資料更新": "private",
+    "資安檢查": "private",
+    "私人案件管理": "private",
+    "匯入案件文件": "private",
+    "案件文件閱讀": "private",
+    "Codex 分析資料": "private",
+    "AI 分析結果": "private",
+    "批次儀表板": "private",
+    "誤判風險稽核": "private",
+    "帳號管理": "admin",
+}
+
+
+def page_is_allowed(page_name: str) -> bool:
+    required = page_access.get(page_name, "public")
+    if required == "admin":
+        return has_admin_access()
+    if required == "private":
+        return has_private_access()
+    return has_public_access()
+
+
+visible_pages: list[str] = []
+with st.sidebar:
+    st.markdown("### 功能導覽")
+    for group_name, group_pages in PAGE_GROUPS:
+        group_visible = [page for page in group_pages if page_is_allowed(page)]
+        if group_visible:
+            st.caption(group_name)
+            visible_pages.extend(group_visible)
+    if not visible_pages:
+        visible_pages = ["總覽"]
+    if st.session_state.get("selected_page") not in visible_pages:
+        st.session_state.selected_page = visible_pages[0]
+    selected_page = st.radio("選擇專頁", visible_pages, label_visibility="collapsed", key="selected_page")
+    st.divider()
+    st.caption(f"目前權限：{current_access_level()}")
+
+if selected_page == "總覽":
     st.subheader("目前資料概況")
     c1, c2 = st.columns(2)
     with c1:
@@ -833,7 +1132,7 @@ with tabs[0]:
         unsafe_allow_html=True,
     )
 
-with tabs[1]:
+elif selected_page == "公開評議書搜尋":
     st.subheader("公開評議書搜尋")
     st.caption("搜尋、篩選、預覽、下載與加入分析批次都在同一頁完成。")
     st.markdown('<div class="layout-kicker">ACTION BAR</div><div class="action-bar-note">搜尋條件與篩選</div>', unsafe_allow_html=True)
@@ -920,7 +1219,7 @@ with tabs[1]:
             cids_text = "\n".join(str(row.get("cid", "")) for row in rows if row.get("cid")) + "\n"
             e3.download_button("下載 cid 清單", data=cids_text.encode("utf-8"), file_name="search_cids.txt", mime="text/plain", width="stretch")
 
-with tabs[2]:
+elif selected_page == "公開案件閱讀":
     st.subheader("案件閱讀")
     cid_input = st.text_input("輸入 cid", value="")
     if not cid_input:
@@ -943,8 +1242,11 @@ with tabs[2]:
         else:
             st.warning("找不到這個 cid。")
 
-with tabs[3]:
+elif selected_page == "資料管理":
     st.subheader("資料管理")
+    private_data_unlocked = has_private_access()
+    if not private_data_unlocked:
+        require_private_access()
     pasted = st.text_area("貼上 cid、案件網址或混雜文字", height=160, placeholder="https://appeal.moe.gov.tw/appraise_view.aspx?cid=114070228")
     cids = extract_cids(pasted)
     st.caption(f"已解析 cid：{len(cids)} 個")
@@ -954,26 +1256,27 @@ with tabs[3]:
     d1, d2 = st.columns(2)
     with d1:
         sleep_seconds = st.number_input("下載間隔秒數", min_value=0.0, max_value=10.0, value=1.5, step=0.5)
-        if st.button("下載上方 cid 並更新 CSV", disabled=not cids):
+        if st.button("下載上方 cid 並更新 CSV", disabled=(not cids) or not private_data_unlocked):
             EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
             temp_cids = EXPORTS_DIR / "streamlit_cids.txt"
             temp_cids.write_text("\n".join(cids) + "\n", encoding="utf-8")
             ok, output = run_command([sys.executable, "scripts/crawl_appeal.py", "--cid-file", str(temp_cids), "--sleep", str(sleep_seconds)], timeout=1800)
             st.success(output) if ok else st.error(output)
     with d2:
-        if st.button("重建 SQLite 資料庫"):
+        if st.button("重建 SQLite 資料庫", disabled=not private_data_unlocked):
             ok, output = run_command([sys.executable, "scripts/build_db.py"])
             st.success(output) if ok else st.error(output)
     st.markdown("**目前資料檔**")
     files = [
         ("cases.csv", CASES_CSV),
         ("appeal_cases.db", DB_PATH),
-        ("private_cases.db", PRIVATE_DB_PATH),
         ("crawl_errors.log", ERROR_LOG),
     ]
+    if private_data_unlocked:
+        files.insert(2, ("private_cases.db", PRIVATE_DB_PATH))
     st.dataframe(pd.DataFrame([{"檔案": name, "存在": path.exists(), "大小": path.stat().st_size if path.exists() else 0} for name, path in files]), hide_index=True)
 
-with tabs[4]:
+elif selected_page == "公開 AI 分析包":
     st.subheader("公開評議書 AI 分析包")
     st.info("勾選公開案件後產生可下載的 ChatGPT / Gemini 上傳包；本頁不呼叫外部 API，也不會自動上傳全文。")
     if not CASES_CSV.exists():
@@ -1067,6 +1370,10 @@ with tabs[4]:
             if CLOUD_PUBLIC_MODE:
                 web_sleep = 3.0
                 st.info("雲端公開版不啟動 ChatGPT/Gemini 瀏覽器自動化。請下載 AI 上傳包後，手動到 ChatGPT/Gemini 分析並回到「AI 分析結果」保存。")
+                recent_batches = []
+            elif not has_private_access():
+                web_sleep = 3.0
+                st.info("網頁批次自動分析屬於私人/分析功能。請先在左側輸入私人/分析功能密碼。")
                 recent_batches = []
             else:
                 st.markdown('<div class="layout-kicker">ACTION BAR</div><div class="action-bar-note">網頁批次自動分析</div>', unsafe_allow_html=True)
@@ -1283,23 +1590,26 @@ with tabs[4]:
                     time.sleep(int(refresh_seconds))
                     st.rerun()
 
-with tabs[5]:
+elif selected_page == "資安檢查":
     st.subheader("資安與健康檢查")
-    st.write("這裡檢查本機資料、爬蟲錯誤紀錄與資料庫同步狀態。")
-    checks = run_health_check(model=llm_config.model, base_url=llm_config.base_url, check_ai=False)
-    for name, status, detail in checks:
-        if status == "PASS":
-            st.success(f"{name}：{detail}")
-        else:
-            st.warning(f"{name}：{detail}")
-    st.markdown("**使用提醒**")
-    st.write("- 本工具預設用公開案件資料；若加入非公開資料，請先去識別化。")
-    st.write("- 教育部站台憑證異常時爬蟲會採寬鬆模式重試，正式環境可改用 `--verify-ssl`。")
-    st.write("- AI 回答只能作整理草稿；正式引用請回到 cid 原文確認。")
+    if require_private_access():
+        st.write("這裡檢查本機資料、爬蟲錯誤紀錄與資料庫同步狀態。")
+        checks = run_health_check(model=llm_config.model, base_url=llm_config.base_url, check_ai=False)
+        for name, status, detail in checks:
+            if status == "PASS":
+                st.success(f"{name}：{detail}")
+            else:
+                st.warning(f"{name}：{detail}")
+        st.markdown("**使用提醒**")
+        st.write("- 本工具預設用公開案件資料；若加入非公開資料，請先去識別化。")
+        st.write("- 教育部站台憑證異常時爬蟲會採寬鬆模式重試，正式環境可改用 `--verify-ssl`。")
+        st.write("- AI 回答只能作整理草稿；正式引用請回到 cid 原文確認。")
 
-with tabs[6]:
+elif selected_page == "私人案件管理":
     st.subheader("私人案件管理")
-    if CLOUD_PUBLIC_MODE:
+    if not require_private_access():
+        pass
+    elif CLOUD_PUBLIC_MODE:
         st.info("雲端公開版停用私人案件管理。私人文件、private_cases.db、uploaded_cases/ 與 exports/ 請留在本機使用。")
     else:
         init_private_db()
@@ -1338,9 +1648,11 @@ with tabs[6]:
         else:
             st.info("尚未建立私人案件。")
 
-with tabs[7]:
+elif selected_page == "匯入案件文件":
     st.subheader("匯入案件文件")
-    if CLOUD_PUBLIC_MODE:
+    if not require_private_access():
+        pass
+    elif CLOUD_PUBLIC_MODE:
         st.info("雲端公開版停用私人文件匯入。請在本機版處理 PDF、DOCX、TXT 與去識別化私人案件。")
     else:
         cases = private_case_options()
@@ -1373,9 +1685,11 @@ with tabs[7]:
                     if row["狀態"] in {"no_text", "parsed_with_warnings"}:
                         st.warning(f"{row['檔名']}：{row['訊息']}")
 
-with tabs[8]:
+elif selected_page == "案件文件閱讀":
     st.subheader("案件文件閱讀")
-    if CLOUD_PUBLIC_MODE:
+    if not require_private_access():
+        pass
+    elif CLOUD_PUBLIC_MODE:
         st.info("雲端公開版停用私人案件文件閱讀。私人案件資料不會上傳雲端。")
     else:
         cases = private_case_options()
@@ -1409,9 +1723,11 @@ with tabs[8]:
                 else:
                     st.info("沒有符合結果。")
 
-with tabs[9]:
+elif selected_page == "Codex 分析資料":
     st.subheader("Codex 分析資料")
-    if CLOUD_PUBLIC_MODE:
+    if not require_private_access():
+        pass
+    elif CLOUD_PUBLIC_MODE:
         st.info("雲端公開版停用私人 Codex 分析資料包。請在本機版輸出私人案件 Markdown。")
     else:
         st.info("此功能只整理來源資料並輸出 Markdown，不摘要、不改寫原文，也不從程式內呼叫 Codex IDE。")
@@ -1471,11 +1787,14 @@ with tabs[9]:
                 except Exception as exc:
                     st.error(f"輸出失敗：{exc}")
 
-with tabs[10]:
+elif selected_page == "AI 分析結果":
     st.subheader("AI 分析結果")
     st.info("這裡直接列出已完成的 ChatGPT / Gemini / Codex 分析結果，可搜尋、開啟回覆、查看引用覆核表。")
+    private_analysis_unlocked = has_private_access()
+    if not private_analysis_unlocked:
+        require_private_access()
 
-    result_rows = analysis_result_rows()
+    result_rows = analysis_result_rows() if private_analysis_unlocked else []
     if result_rows:
         result_df = pd.DataFrame(result_rows)
         st.markdown('<div class="layout-kicker">ACTION BAR</div><div class="action-bar-note">搜尋與結果統計</div>', unsafe_allow_html=True)
@@ -1569,9 +1888,9 @@ with tabs[10]:
     st.subheader("手動補登分析紀錄")
     st.caption("若是手動在 ChatGPT/Gemini/Codex 分析，也可以在這裡把原始回覆貼回來保存。")
     source_options = ["公開 AI 上傳包"] if CLOUD_PUBLIC_MODE else ["公開 AI 上傳包", "私人 Codex 分析包"]
-    source_kind = st.radio("紀錄來源", source_options, horizontal=True)
+    source_kind = st.radio("紀錄來源", source_options, horizontal=True, disabled=not private_analysis_unlocked)
     scope = "public_bundle" if source_kind == "公開 AI 上傳包" else "private_case"
-    options = public_bundle_options() if scope == "public_bundle" else private_export_options()
+    options = [] if not private_analysis_unlocked else (public_bundle_options() if scope == "public_bundle" else private_export_options())
     if not options:
         st.warning("找不到可紀錄的來源包。請先產生公開 AI 上傳包或私人 Codex 分析包。")
     else:
@@ -1618,7 +1937,7 @@ with tabs[10]:
                     st.error(f"保存失敗：{exc}")
 
     st.markdown("**既有分析紀錄**")
-    runs = list_analysis_runs()
+    runs = list_analysis_runs() if private_analysis_unlocked else []
     if runs:
         run_df = pd.DataFrame(
             [
@@ -1639,11 +1958,13 @@ with tabs[10]:
     else:
         st.info("尚無分析紀錄。")
 
-with tabs[11]:
+elif selected_page == "批次儀表板":
     st.subheader("批次儀表板")
     st.caption("以本機 AJAX 狀態服務動態監控 ChatGPT/Gemini 批次分析；不會整頁刷新停頓。")
 
-    if CLOUD_PUBLIC_MODE:
+    if not require_private_access():
+        batches = []
+    elif CLOUD_PUBLIC_MODE:
         st.info("雲端公開版停用 ChatGPT/Gemini 瀏覽器批次與本機 AJAX 儀表板。請在本機版執行批次，或在雲端下載 AI 上傳包後手動分析。")
         batches = []
     else:
@@ -1731,9 +2052,12 @@ with tabs[11]:
             st.info("可按上方「啟動/檢查儀表板服務」重試。")
         st.caption(f"批次目錄：{dashboard_batch}")
 
-with tabs[12]:
+elif selected_page == "公開資料更新":
     st.subheader("公開資料更新")
     st.caption("檢查教育部公開查詢頁是否有新增評議書，只下載新增案件並更新本機 SQLite/FTS；不會自動送 ChatGPT/Gemini。")
+    private_update_unlocked = has_private_access()
+    if not private_update_unlocked:
+        require_private_access()
 
     st.markdown('<div class="layout-kicker">ACTION BAR</div><div class="action-bar-note">更新參數與啟動</div>', unsafe_allow_html=True)
     with st.container(border=True):
@@ -1745,7 +2069,7 @@ with tabs[12]:
 
         if CLOUD_PUBLIC_MODE:
             st.info("雲端公開版請使用 GitHub Actions 排程更新；Streamlit Cloud runtime 不直接提交資料變更。")
-        if st.button("啟動公開資料更新", type="primary", disabled=CLOUD_PUBLIC_MODE):
+        if st.button("啟動公開資料更新", type="primary", disabled=CLOUD_PUBLIC_MODE or not private_update_unlocked):
             try:
                 UPDATE_RUNS_DIR.mkdir(parents=True, exist_ok=True)
                 stamp = time.strftime("%Y%m%d_%H%M%S")
@@ -1782,7 +2106,7 @@ with tabs[12]:
         st.code(schedule_cmd, language="powershell")
 
     st.markdown('<div class="content-panel-note">內容區：更新紀錄與待分析清單</div>', unsafe_allow_html=True)
-    runs = update_run_options()
+    runs = update_run_options() if private_update_unlocked else []
     if not runs:
         st.info("尚無更新紀錄。")
     else:
@@ -1825,7 +2149,7 @@ with tabs[12]:
             st.markdown("**AI 待分析 cid**")
             st.text_area("本次新增且下載成功，尚待你確認後送 AI 分析", value="\n".join(pending_cids), height=140)
             b1, b2 = st.columns([1, 2])
-            if b1.button("建立待分析批次清單", width="stretch"):
+            if b1.button("建立待分析批次清單", width="stretch", disabled=not private_update_unlocked):
                 try:
                     batch_dir = create_batch_dir("chatgpt")
                     write_batch_manifest(batch_dir, "chatgpt", "", pending_cids, 3.0)
@@ -1840,3 +2164,327 @@ with tabs[12]:
         with st.expander("更新 log", expanded=False):
             st.text_area("stdout.log", value=stdout_text[-8000:], height=220)
             st.text_area("stderr.log", value=stderr_text[-8000:], height=180)
+
+elif selected_page == "誤判風險稽核":
+    st.subheader("誤判風險稽核")
+    st.caption("針對已下載公開案件與已保存 AI 分析結果產生人工覆核清單；本功能只標示可能誤判風險，不作成最終認定或懲處建議。")
+    private_audit_unlocked = has_private_access()
+    if not private_audit_unlocked:
+        require_private_access()
+
+    reports = list_audit_reports() if private_audit_unlocked else []
+    st.markdown('<div class="layout-kicker">ACTION BAR</div><div class="action-bar-note">掃描範圍與報表產生</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        a1, a2, a3 = st.columns([1.1, 1.1, 1.3])
+        audit_scope = a1.radio(
+            "掃描範圍",
+            ["全部已下載案件＋AI 分析", "指定 cid", "只掃 AI 分析", "高風險重掃"],
+            horizontal=False,
+            key="misjudgment_audit_scope",
+        )
+        include_cases = a2.checkbox("掃描評議書原文", value=audit_scope != "只掃 AI 分析", key="misjudgment_include_cases")
+        include_ai = a2.checkbox("掃描 AI 分析回覆", value=True, key="misjudgment_include_ai")
+        cid_text = a3.text_area("指定 cid（每行一筆）", height=110, placeholder="例如：114070228\n113030073", key="misjudgment_cids")
+
+        selected_cids: list[str] | None = None
+        if audit_scope == "指定 cid":
+            selected_cids = [line.strip() for line in cid_text.splitlines() if line.strip()]
+            if not selected_cids:
+                st.info("指定 cid 模式請先輸入至少一筆 cid。")
+        elif audit_scope == "只掃 AI 分析":
+            include_cases = False
+            include_ai = True
+        elif audit_scope == "高風險重掃":
+            if reports:
+                latest_payload = read_audit_report(reports[0])
+                selected_cids = sorted(
+                    {
+                        str(row.get("cid", "")).strip()
+                        for row in latest_payload.get("findings", [])
+                        if row.get("risk_level") == "high" and str(row.get("cid", "")).strip()
+                    }
+                )
+                st.caption(f"將依最近報表重掃高風險 cid：{len(selected_cids)} 筆")
+            else:
+                selected_cids = []
+                st.info("尚無既有稽核報表，無法執行高風險重掃。")
+
+        disabled = audit_scope == "指定 cid" and not selected_cids
+        disabled = disabled or (audit_scope == "高風險重掃" and not selected_cids) or not private_audit_unlocked
+        if st.button("產生可能誤判風險報表", type="primary", disabled=disabled, width="stretch"):
+            try:
+                with st.spinner("正在執行嚴格稽核，請稍候..."):
+                    result = create_audit_report(
+                        cids=selected_cids,
+                        include_cases=include_cases,
+                        include_analysis_runs=include_ai,
+                    )
+                st.success(f"已產生稽核報表：{result.report_id}")
+                st.caption(f"輸出目錄：{result.report_dir}")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"稽核失敗：{exc}")
+
+        st.code(
+            "python scripts/misjudgment_audit.py --all --html\n"
+            "python scripts/misjudgment_audit.py --cid 114070228\n"
+            "python scripts/misjudgment_audit.py --analysis-runs",
+            language="bash",
+        )
+
+    st.markdown('<div class="content-panel-note">內容區：稽核結果與下載</div>', unsafe_allow_html=True)
+    reports = list_audit_reports() if private_audit_unlocked else []
+    if not reports:
+        st.info("尚無可能誤判風險稽核報表。")
+    else:
+        selected_report_label = st.selectbox("選擇稽核報表", [path_label(path) for path in reports], key="misjudgment_report")
+        selected_report = reports[[path_label(path) for path in reports].index(selected_report_label)]
+        try:
+            payload = read_audit_report(selected_report)
+            summary = payload.get("summary", {})
+            findings = payload.get("findings", [])
+        except Exception as exc:
+            summary = {}
+            findings = []
+            st.error(f"讀取報表失敗：{exc}")
+
+        level_counts = summary.get("level_counts", {}) if isinstance(summary, dict) else {}
+        m1, m2, m3, m4, m5, m6 = st.columns(6)
+        m1.metric("掃描案件", int(summary.get("scanned_cases", 0) or 0))
+        m2.metric("AI 分析", int(summary.get("scanned_analysis_runs", 0) or 0))
+        m3.metric("風險項目", int(summary.get("finding_count", 0) or 0))
+        m4.metric("高風險", int(level_counts.get("high", 0) or 0))
+        m5.metric("中風險", int(level_counts.get("medium", 0) or 0))
+        m6.metric("低風險", int(level_counts.get("low", 0) or 0))
+        st.warning(str(summary.get("disclaimer", "本報表僅供人工覆核，不作成最終認定。")))
+
+        html_path = selected_report / "misjudgment_audit.html"
+        csv_path = selected_report / "misjudgment_audit.csv"
+        json_path = selected_report / "misjudgment_audit.json"
+        d1, d2, d3, d4 = st.columns(4)
+        d1.link_button("開啟 HTML 報表", file_url(html_path), disabled=not html_path.exists(), width="stretch")
+        if html_path.exists():
+            d2.download_button("下載 HTML", data=html_path.read_bytes(), file_name=html_path.name, mime="text/html", width="stretch")
+        if csv_path.exists():
+            d3.download_button("下載 CSV", data=csv_path.read_bytes(), file_name=csv_path.name, mime="text/csv", width="stretch")
+        if json_path.exists():
+            d4.download_button("下載 JSON", data=json_path.read_bytes(), file_name=json_path.name, mime="application/json", width="stretch")
+
+        if findings:
+            result_df = pd.DataFrame(findings)
+            for column in ["triggered_rules", "source_refs"]:
+                if column in result_df.columns:
+                    result_df[column] = result_df[column].apply(lambda value: "；".join(value) if isinstance(value, list) else str(value))
+            q = st.text_input("搜尋風險項目", placeholder="輸入 cid、標題、風險類型、規則或待確認事項", key="misjudgment_search")
+            shown_df = result_df.copy()
+            if q.strip():
+                needle = q.strip()
+                search_cols = [col for col in ["cid", "title", "risk_type", "triggered_rules", "source_refs", "review_note", "excerpt"] if col in shown_df.columns]
+                mask = shown_df[search_cols].fillna("").astype(str).apply(lambda col: col.str.contains(needle, case=False, regex=False)).any(axis=1)
+                shown_df = shown_df[mask]
+            level_filter = st.multiselect("風險等級", ["high", "medium", "low"], default=["high", "medium", "low"], key="misjudgment_level_filter")
+            if level_filter and "risk_level" in shown_df.columns:
+                shown_df = shown_df[shown_df["risk_level"].isin(level_filter)]
+            st.dataframe(
+                shown_df[
+                    [
+                        col
+                        for col in [
+                            "risk_level",
+                            "risk_score",
+                            "risk_type",
+                            "cid",
+                            "title",
+                            "result",
+                            "issue_type",
+                            "triggered_rules",
+                            "source_refs",
+                            "judgment_result",
+                            "judgment_basis",
+                            "review_note",
+                            "status",
+                            "run_id",
+                        ]
+                        if col in shown_df.columns
+                    ]
+                ],
+                width="stretch",
+                hide_index=True,
+            )
+
+            if not shown_df.empty:
+                detail_options = [
+                    f"{row.risk_score}｜{row.risk_type}｜{row.cid}｜{row.title}"
+                    for row in shown_df.itertuples()
+                ]
+                selected_detail = st.selectbox("單項詳情", detail_options, key="misjudgment_detail")
+                detail_index = detail_options.index(selected_detail)
+                detail = shown_df.iloc[detail_index].to_dict()
+                with st.container(border=True):
+                    st.markdown(f"### {detail.get('cid', '')}｜{detail.get('title', '')}")
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("風險等級", detail.get("risk_level", ""))
+                    c2.metric("風險分數", int(detail.get("risk_score", 0) or 0))
+                    c3.metric("風險類型", detail.get("risk_type", ""))
+                    st.write(f"觸發規則：{detail.get('triggered_rules', '')}")
+                    st.write(f"來源核對：{detail.get('source_refs', '') or '來源待確認'}")
+                    st.error(f"初步覆核判斷：{detail.get('judgment_result', '')}")
+                    st.write(f"判斷依據：{detail.get('judgment_basis', '')}")
+                    st.write(f"待確認事項：{detail.get('review_note', '')}")
+                    detail_finding = AuditFinding(
+                        risk_level=str(detail.get("risk_level", "")),
+                        risk_score=int(detail.get("risk_score", 0) or 0),
+                        risk_type=str(detail.get("risk_type", "")),
+                        cid=str(detail.get("cid", "")),
+                        title=str(detail.get("title", "")),
+                        result=str(detail.get("result", "")),
+                        issue_type=str(detail.get("issue_type", "")),
+                        date_text=str(detail.get("date_text", "")),
+                        triggered_rules=[str(detail.get("triggered_rules", ""))],
+                        source_refs=[str(detail.get("source_refs", ""))],
+                        excerpt=str(detail.get("excerpt", "")),
+                        review_note=str(detail.get("review_note", "")),
+                        judgment_result=str(detail.get("judgment_result", "")),
+                        judgment_basis=str(detail.get("judgment_basis", "")),
+                        status=str(detail.get("status", "待覆核")),
+                        run_id=str(detail.get("run_id", "")),
+                        provider=str(detail.get("provider", "")),
+                        model_name=str(detail.get("model_name", "")),
+                    )
+                    st.markdown(
+                        f"""
+                        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.9fr);gap:14px;align-items:start;">
+                          <div>
+                            <strong>系統紅字標示</strong>
+                            <div style="margin-top:8px;padding:10px 12px;background:#f8fafc;border-left:4px solid #b42318;border-radius:6px;line-height:1.65;">
+                              {highlighted_excerpt_html(detail_finding)}
+                            </div>
+                          </div>
+                          <div>
+                            <strong>人工判讀方式</strong>
+                            <ol style="margin-top:8px;">
+                              {''.join(f'<li>{escape(step)}</li>' for step in audit_interpretation_steps(str(detail.get("risk_type", ""))))}
+                            </ol>
+                          </div>
+                        </div>
+                        <style>
+                          .risk-hit {{ color:#b42318; background:#fee2e2; font-weight:800; padding:0 3px; border-radius:3px; }}
+                        </style>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    if str(detail.get("run_id", "")).strip():
+                        run_id = str(detail.get("run_id", ""))
+                        st.link_button("開啟 AI 回覆", file_url(ANALYSIS_RUNS_DIR / run_id / "ai_response.md"), disabled=not (ANALYSIS_RUNS_DIR / run_id / "ai_response.md").exists())
+        else:
+            st.success("本次未偵測到風險項目；仍建議正式引用前回到來源全文覆核。")
+
+        st.caption(f"稽核報表根目錄：{AUDIT_REPORTS_DIR}")
+
+elif selected_page == "帳號管理":
+    st.subheader("帳號管理")
+    st.caption("管理工作台登入帳號與公開 / 私人 / 管理員權限。密碼以 PBKDF2 雜湊保存在 data/auth_users.json。")
+
+    if require_admin_access():
+        users = load_auth_users()
+        visible_rows = [
+            {
+                "帳號": user.get("username", ""),
+                "顯示名稱": user.get("display_name", ""),
+                "角色": user.get("role", ""),
+                "啟用": bool(user.get("active", True)),
+                "建立時間": user.get("created_at", ""),
+                "更新時間": user.get("updated_at", ""),
+            }
+            for user in users
+        ]
+        st.markdown("**帳號列表**")
+        st.dataframe(pd.DataFrame(visible_rows), width="stretch", hide_index=True)
+
+        st.markdown("**新增帳號**")
+        with st.form("create_auth_user"):
+            c1, c2, c3 = st.columns([1, 1.2, 1])
+            new_username = c1.text_input("帳號", key="new_auth_username")
+            new_display_name = c2.text_input("顯示名稱", key="new_auth_display_name")
+            new_role = c3.selectbox("角色", ["public", "private", "admin"], key="new_auth_role")
+            new_password = st.text_input("初始密碼", type="password", value=DEFAULT_APP_PASSWORD, key="new_auth_password")
+            create_submitted = st.form_submit_button("新增帳號", type="primary")
+        if create_submitted:
+            normalized = new_username.strip().lower()
+            if not normalized:
+                st.error("帳號不可空白。")
+            elif any(str(user.get("username", "")).strip().lower() == normalized for user in users):
+                st.error("帳號已存在。")
+            elif not new_password:
+                st.error("密碼不可空白。")
+            else:
+                now = time.strftime("%Y-%m-%dT%H:%M:%S")
+                users.append(
+                    {
+                        "username": normalized,
+                        "display_name": new_display_name.strip() or normalized,
+                        "role": new_role,
+                        "active": True,
+                        "created_at": now,
+                        "updated_at": now,
+                        **hash_password(new_password),
+                    }
+                )
+                save_auth_users(users)
+                st.success(f"已新增帳號：{normalized}")
+                st.rerun()
+
+        st.markdown("**編輯帳號**")
+        user_labels = [f"{user.get('username', '')}｜{user.get('role', '')}" for user in users]
+        selected_user_label = st.selectbox("選擇帳號", user_labels, key="edit_auth_user_select")
+        selected_username = selected_user_label.split("｜", 1)[0] if selected_user_label else ""
+        selected_user = next((user for user in users if str(user.get("username", "")) == selected_username), None)
+        active_admins = [
+            user
+            for user in users
+            if bool(user.get("active", True)) and str(user.get("role", "")) == "admin"
+        ]
+        if selected_user:
+            with st.form("edit_auth_user"):
+                e1, e2, e3 = st.columns([1.2, 1, 1])
+                edit_display_name = e1.text_input("顯示名稱", value=str(selected_user.get("display_name") or ""))
+                edit_role = e2.selectbox(
+                    "角色",
+                    ["public", "private", "admin"],
+                    index=["public", "private", "admin"].index(str(selected_user.get("role") or "public")),
+                )
+                edit_active = e3.checkbox("啟用", value=bool(selected_user.get("active", True)))
+                reset_password = st.text_input("重設密碼（留空表示不變更）", type="password")
+                submitted = st.form_submit_button("儲存帳號設定", type="primary")
+            if submitted:
+                is_last_admin = (
+                    str(selected_user.get("role", "")) == "admin"
+                    and bool(selected_user.get("active", True))
+                    and len(active_admins) <= 1
+                    and (edit_role != "admin" or not edit_active)
+                )
+                if is_last_admin:
+                    st.error("不可停用或降權最後一個啟用中的管理員帳號。")
+                else:
+                    for index, user in enumerate(users):
+                        if str(user.get("username", "")) == selected_username:
+                            users[index]["display_name"] = edit_display_name.strip() or selected_username
+                            users[index]["role"] = edit_role
+                            users[index]["active"] = bool(edit_active)
+                            users[index]["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                            if reset_password:
+                                users[index].update(hash_password(reset_password))
+                            break
+                    save_auth_users(users)
+                    if current_user() and current_user().get("username") == selected_username:
+                        st.session_state.auth_user = {
+                            "username": selected_username,
+                            "display_name": edit_display_name.strip() or selected_username,
+                            "role": edit_role,
+                        }
+                    st.success("帳號設定已更新。")
+                    st.rerun()
+
+        st.markdown("**預設帳號**")
+        st.info("首次啟動會建立 admin / public / private，預設密碼皆為 simisimi520。正式遠端開放後，請先用 admin 登入並重設密碼。")
+
