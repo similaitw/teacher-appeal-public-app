@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
+import { AuthMenu } from "../../auth-menu";
 import type { CaseRecord } from "../../../lib/types";
 
 type CaseState =
@@ -61,10 +62,13 @@ export default function CaseClient({ cid }: { cid: string }) {
               <div className="brand-subtitle">cid {record.cid}</div>
             </div>
           </div>
-          <Link className="button secondary" href="/">
-            <ArrowLeft size={17} aria-hidden="true" />
-            回查詢頁
-          </Link>
+          <div className="topbar-actions">
+            <AuthMenu />
+            <Link className="button secondary" href="/">
+              <ArrowLeft size={17} aria-hidden="true" />
+              回查詢頁
+            </Link>
+          </div>
         </div>
       </header>
 

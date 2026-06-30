@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { BookOpenText, RefreshCcw, Search, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { AuthMenu } from "./auth-menu";
 import type { CaseIndexItem, Manifest } from "../lib/types";
 
 type DataState =
@@ -79,7 +80,10 @@ export default function HomePage() {
               <div className="brand-subtitle">教育部公開評議書資料，供快速檢索與閱讀</div>
             </div>
           </div>
-          <div className="muted">更新：{new Date(data.manifest.generatedAt).toLocaleString("zh-TW")}</div>
+          <div className="topbar-actions">
+            <div className="muted">更新：{new Date(data.manifest.generatedAt).toLocaleString("zh-TW")}</div>
+            <AuthMenu />
+          </div>
         </div>
       </header>
 
