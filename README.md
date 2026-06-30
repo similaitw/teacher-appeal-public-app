@@ -363,13 +363,21 @@ http://localhost:8501
 
 ### 遠端操作與帳號權限
 
-Streamlit 工作台支援帳號與角色權限。首次啟動會建立 `admin`、`public`、`private` 三個帳號；預設密碼可用 `DEFAULT_APP_PASSWORD` 覆寫，若未設定則使用 `APP_PASSWORD`，最後才使用 `simisimi520`。正式遠端開放後，請先用 `admin` 登入右上角「帳號與權限」，到「帳號管理」重設密碼。
+Streamlit 工作台支援同一網址的帳號與角色權限。所有人使用同一個工作台網址，右上角提供「登入」或「帳號與權限」；管理者登入後可使用完整功能，並可在「帳號管理」調整每個模組要開放給哪些角色。首次啟動會建立 `admin`、`public`、`private` 三個帳號；預設密碼可用 `DEFAULT_APP_PASSWORD` 覆寫，若未設定則使用 `APP_PASSWORD`，最後才使用 `simisimi520`。正式遠端開放後，請先用 `admin` 登入右上角「帳號與權限」，到「帳號管理」重設密碼。
 
 角色權限：
 
 - `public`：公開搜尋、公開案件閱讀、公開 AI 上傳包。
 - `private`：私人案件、文件匯入、Codex 分析包、AI 分析結果、ChatGPT/Gemini 網頁批次、公開資料更新、誤判風險稽核與資安檢查。
 - `admin`：包含所有私人功能，並可管理帳號。
+
+模組開放等級：
+
+- `所有人`：未登入也可看到並使用。
+- `登入帳號`：`public`、`private`、`admin` 可使用。
+- `私人/管理者`：`private`、`admin` 可使用。
+- `僅管理者`：只有 `admin` 可使用。
+- `停用`：非管理者不顯示；管理者仍可在後台重新開啟。
 
 PowerShell 範例：
 
@@ -378,7 +386,7 @@ $env:DEFAULT_APP_PASSWORD="請改成強密碼"
 python -m streamlit run app/streamlit_app.py --server.address 0.0.0.0 --server.port 8501
 ```
 
-帳號資料會以 PBKDF2 雜湊保存在 `data/auth_users.json`。遠端開放前請確認 `data/auth_users.json`、`private_cases.db`、`uploaded_cases/`、`exports/`、`data/ai_exports/` 與 `browser_profiles/` 不會提交到公開 repo；目前 `.gitignore` 已排除這些私人資料。
+帳號資料會以 PBKDF2 雜湊保存在 `data/auth_users.json`，模組權限保存在 `data/module_permissions.json`。遠端開放前請確認 `data/auth_users.json`、`data/module_permissions.json`、`private_cases.db`、`uploaded_cases/`、`exports/`、`data/ai_exports/` 與 `browser_profiles/` 不會提交到公開 repo；目前 `.gitignore` 已排除這些私人資料。
 
 介面支援關鍵字、cid、年度、案件類型與結果篩選，並可顯示全文、匯出 Excel、產生 AI 分析包、監控批次分析與查看歸檔結果。
 

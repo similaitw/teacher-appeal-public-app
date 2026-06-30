@@ -11,6 +11,7 @@ web/public/data/
 uploaded_cases/
 exports/
 data/auth_users.json
+data/module_permissions.json
 data/ai_exports/
 data/audit_reports/
 data/streamlit_logs/

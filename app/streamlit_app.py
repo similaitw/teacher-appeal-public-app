@@ -96,6 +96,7 @@ def read_secret_value(name: str) -> str:
 
 
 AUTH_USERS_PATH = ROOT_DIR / "data" / "auth_users.json"
+MODULE_PERMISSIONS_PATH = ROOT_DIR / "data" / "module_permissions.json"
 DEFAULT_APP_PASSWORD = read_secret_value("DEFAULT_APP_PASSWORD") or read_secret_value("APP_PASSWORD") or "simisimi520"
 AUTH_ENABLED = read_secret_value("AUTH_DISABLED").lower() not in {"1", "true", "yes"}
 
@@ -909,6 +910,86 @@ def save_auth_users(users: list[dict[str, object]]) -> None:
     AUTH_USERS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+PAGE_GROUPS = [
+    ("公開資料", ["總覽", "公開評議書搜尋", "公開案件閱讀", "公開 AI 分析包"]),
+    ("資料維護", ["資料管理", "公開資料更新", "資安檢查"]),
+    ("私人案件", ["私人案件管理", "匯入案件文件", "案件文件閱讀", "Codex 分析資料"]),
+    ("分析覆核", ["AI 分析結果", "批次儀表板", "誤判風險稽核"]),
+    ("系統", ["帳號管理"]),
+]
+
+DEFAULT_MODULE_ACCESS = {
+    "總覽": "guest",
+    "公開評議書搜尋": "guest",
+    "公開案件閱讀": "guest",
+    "公開 AI 分析包": "guest",
+    "資料管理": "private",
+    "公開資料更新": "private",
+    "資安檢查": "private",
+    "私人案件管理": "private",
+    "匯入案件文件": "private",
+    "案件文件閱讀": "private",
+    "Codex 分析資料": "private",
+    "AI 分析結果": "private",
+    "批次儀表板": "private",
+    "誤判風險稽核": "private",
+    "帳號管理": "admin",
+}
+
+ACCESS_LABELS = {
+    "guest": "所有人",
+    "public": "登入帳號",
+    "private": "私人/管理者",
+    "admin": "僅管理者",
+    "disabled": "停用",
+}
+
+ACCESS_ORDER = {"guest": 0, "public": 1, "private": 2, "admin": 3}
+
+
+def all_page_names() -> list[str]:
+    return [page for _group, pages in PAGE_GROUPS for page in pages]
+
+
+def default_module_permissions() -> dict[str, str]:
+    return {page: DEFAULT_MODULE_ACCESS.get(page, "admin") for page in all_page_names()}
+
+
+def load_module_permissions() -> dict[str, str]:
+    MODULE_PERMISSIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    defaults = default_module_permissions()
+    if not MODULE_PERMISSIONS_PATH.exists():
+        save_module_permissions(defaults)
+        return defaults
+    try:
+        payload = json.loads(MODULE_PERMISSIONS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        save_module_permissions(defaults)
+        return defaults
+    raw_modules = payload.get("modules", {}) if isinstance(payload, dict) else {}
+    permissions = defaults.copy()
+    if isinstance(raw_modules, dict):
+        for page, access in raw_modules.items():
+            value = str(access)
+            if page in permissions and value in ACCESS_LABELS:
+                permissions[page] = value
+    return permissions
+
+
+def save_module_permissions(permissions: dict[str, str]) -> None:
+    MODULE_PERMISSIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    clean = default_module_permissions()
+    for page, access in permissions.items():
+        if page in clean and access in ACCESS_LABELS:
+            clean[page] = access
+    payload = {
+        "version": 1,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "modules": clean,
+    }
+    MODULE_PERMISSIONS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def find_auth_user(username: str) -> dict[str, object] | None:
     normalized = username.strip().lower()
     for user in load_auth_users():
@@ -925,7 +1006,7 @@ def current_user() -> dict[str, object] | None:
 def current_access_level() -> str:
     user = current_user()
     if not user:
-        return "none"
+        return "guest"
     return str(user.get("role") or "none")
 
 
@@ -984,7 +1065,7 @@ def render_auth_panel() -> None:
 def has_public_access() -> bool:
     if not AUTH_ENABLED:
         return True
-    return current_access_level() in {"public", "private", "admin"}
+    return current_access_level() in {"guest", "public", "private", "admin"}
 
 
 def has_private_access() -> bool:
@@ -1041,10 +1122,6 @@ with header_left:
 with header_right:
     render_auth_panel()
 
-if AUTH_ENABLED and not has_public_access():
-    st.info("此工作台已啟用帳號密碼保護。請先在右上角登入後使用。")
-    st.stop()
-
 llm_config = get_ai_config()
 
 stats = db_stats()
@@ -1057,38 +1134,24 @@ m4.metric("最後更新", str(stats["updated"])[:16])
 if not DB_PATH.exists():
     st.warning("尚未建立 data/appeal_cases.db。請先到「資料管理」重建資料庫。")
 
-PAGE_GROUPS = [
-    ("公開資料", ["總覽", "公開評議書搜尋", "公開案件閱讀", "公開 AI 分析包"]),
-    ("資料維護", ["資料管理", "公開資料更新", "資安檢查"]),
-    ("私人案件", ["私人案件管理", "匯入案件文件", "案件文件閱讀", "Codex 分析資料"]),
-    ("分析覆核", ["AI 分析結果", "批次儀表板", "誤判風險稽核"]),
-    ("系統", ["帳號管理"]),
-]
-
-page_access = {
-    "資料管理": "private",
-    "公開資料更新": "private",
-    "資安檢查": "private",
-    "私人案件管理": "private",
-    "匯入案件文件": "private",
-    "案件文件閱讀": "private",
-    "Codex 分析資料": "private",
-    "AI 分析結果": "private",
-    "批次儀表板": "private",
-    "誤判風險稽核": "private",
-    "帳號管理": "admin",
-}
-
-
 def page_is_allowed(page_name: str) -> bool:
-    required = page_access.get(page_name, "public")
-    if required == "admin":
-        return has_admin_access()
+    if has_admin_access():
+        return True
+    required = st.session_state.get("module_permissions", load_module_permissions()).get(page_name, DEFAULT_MODULE_ACCESS.get(page_name, "admin"))
+    if required == "disabled":
+        return False
+    if required == "guest":
+        return True
+    if required == "public":
+        return current_access_level() in {"public", "private", "admin"}
     if required == "private":
         return has_private_access()
-    return has_public_access()
+    if required == "admin":
+        return has_admin_access()
+    return False
 
 
+st.session_state.module_permissions = load_module_permissions()
 visible_pages: list[str] = []
 with st.sidebar:
     st.markdown("### 功能導覽")
@@ -1244,9 +1307,7 @@ elif selected_page == "公開案件閱讀":
 
 elif selected_page == "資料管理":
     st.subheader("資料管理")
-    private_data_unlocked = has_private_access()
-    if not private_data_unlocked:
-        require_private_access()
+    private_data_unlocked = page_is_allowed("資料管理")
     pasted = st.text_area("貼上 cid、案件網址或混雜文字", height=160, placeholder="https://appeal.moe.gov.tw/appraise_view.aspx?cid=114070228")
     cids = extract_cids(pasted)
     st.caption(f"已解析 cid：{len(cids)} 個")
@@ -1371,9 +1432,9 @@ elif selected_page == "公開 AI 分析包":
                 web_sleep = 3.0
                 st.info("雲端公開版不啟動 ChatGPT/Gemini 瀏覽器自動化。請下載 AI 上傳包後，手動到 ChatGPT/Gemini 分析並回到「AI 分析結果」保存。")
                 recent_batches = []
-            elif not has_private_access():
+            elif not page_is_allowed("批次儀表板"):
                 web_sleep = 3.0
-                st.info("網頁批次自動分析屬於私人/分析功能。請先在左側輸入私人/分析功能密碼。")
+                st.info("網頁批次自動分析尚未開放給目前權限。請以管理者調整「批次儀表板」模組權限。")
                 recent_batches = []
             else:
                 st.markdown('<div class="layout-kicker">ACTION BAR</div><div class="action-bar-note">網頁批次自動分析</div>', unsafe_allow_html=True)
@@ -1592,7 +1653,7 @@ elif selected_page == "公開 AI 分析包":
 
 elif selected_page == "資安檢查":
     st.subheader("資安與健康檢查")
-    if require_private_access():
+    if page_is_allowed("資安檢查"):
         st.write("這裡檢查本機資料、爬蟲錯誤紀錄與資料庫同步狀態。")
         checks = run_health_check(model=llm_config.model, base_url=llm_config.base_url, check_ai=False)
         for name, status, detail in checks:
@@ -1607,7 +1668,7 @@ elif selected_page == "資安檢查":
 
 elif selected_page == "私人案件管理":
     st.subheader("私人案件管理")
-    if not require_private_access():
+    if not page_is_allowed("私人案件管理"):
         pass
     elif CLOUD_PUBLIC_MODE:
         st.info("雲端公開版停用私人案件管理。私人文件、private_cases.db、uploaded_cases/ 與 exports/ 請留在本機使用。")
@@ -1650,7 +1711,7 @@ elif selected_page == "私人案件管理":
 
 elif selected_page == "匯入案件文件":
     st.subheader("匯入案件文件")
-    if not require_private_access():
+    if not page_is_allowed("匯入案件文件"):
         pass
     elif CLOUD_PUBLIC_MODE:
         st.info("雲端公開版停用私人文件匯入。請在本機版處理 PDF、DOCX、TXT 與去識別化私人案件。")
@@ -1687,7 +1748,7 @@ elif selected_page == "匯入案件文件":
 
 elif selected_page == "案件文件閱讀":
     st.subheader("案件文件閱讀")
-    if not require_private_access():
+    if not page_is_allowed("案件文件閱讀"):
         pass
     elif CLOUD_PUBLIC_MODE:
         st.info("雲端公開版停用私人案件文件閱讀。私人案件資料不會上傳雲端。")
@@ -1725,7 +1786,7 @@ elif selected_page == "案件文件閱讀":
 
 elif selected_page == "Codex 分析資料":
     st.subheader("Codex 分析資料")
-    if not require_private_access():
+    if not page_is_allowed("Codex 分析資料"):
         pass
     elif CLOUD_PUBLIC_MODE:
         st.info("雲端公開版停用私人 Codex 分析資料包。請在本機版輸出私人案件 Markdown。")
@@ -1790,9 +1851,7 @@ elif selected_page == "Codex 分析資料":
 elif selected_page == "AI 分析結果":
     st.subheader("AI 分析結果")
     st.info("這裡直接列出已完成的 ChatGPT / Gemini / Codex 分析結果，可搜尋、開啟回覆、查看引用覆核表。")
-    private_analysis_unlocked = has_private_access()
-    if not private_analysis_unlocked:
-        require_private_access()
+    private_analysis_unlocked = page_is_allowed("AI 分析結果")
 
     result_rows = analysis_result_rows() if private_analysis_unlocked else []
     if result_rows:
@@ -1962,7 +2021,7 @@ elif selected_page == "批次儀表板":
     st.subheader("批次儀表板")
     st.caption("以本機 AJAX 狀態服務動態監控 ChatGPT/Gemini 批次分析；不會整頁刷新停頓。")
 
-    if not require_private_access():
+    if not page_is_allowed("批次儀表板"):
         batches = []
     elif CLOUD_PUBLIC_MODE:
         st.info("雲端公開版停用 ChatGPT/Gemini 瀏覽器批次與本機 AJAX 儀表板。請在本機版執行批次，或在雲端下載 AI 上傳包後手動分析。")
@@ -2055,9 +2114,7 @@ elif selected_page == "批次儀表板":
 elif selected_page == "公開資料更新":
     st.subheader("公開資料更新")
     st.caption("檢查教育部公開查詢頁是否有新增評議書，只下載新增案件並更新本機 SQLite/FTS；不會自動送 ChatGPT/Gemini。")
-    private_update_unlocked = has_private_access()
-    if not private_update_unlocked:
-        require_private_access()
+    private_update_unlocked = page_is_allowed("公開資料更新")
 
     st.markdown('<div class="layout-kicker">ACTION BAR</div><div class="action-bar-note">更新參數與啟動</div>', unsafe_allow_html=True)
     with st.container(border=True):
@@ -2168,9 +2225,7 @@ elif selected_page == "公開資料更新":
 elif selected_page == "誤判風險稽核":
     st.subheader("誤判風險稽核")
     st.caption("針對已下載公開案件與已保存 AI 分析結果產生人工覆核清單；本功能只標示可能誤判風險，不作成最終認定或懲處建議。")
-    private_audit_unlocked = has_private_access()
-    if not private_audit_unlocked:
-        require_private_access()
+    private_audit_unlocked = page_is_allowed("誤判風險稽核")
 
     reports = list_audit_reports() if private_audit_unlocked else []
     st.markdown('<div class="layout-kicker">ACTION BAR</div><div class="action-bar-note">掃描範圍與報表產生</div>', unsafe_allow_html=True)
@@ -2400,6 +2455,41 @@ elif selected_page == "帳號管理":
         ]
         st.markdown("**帳號列表**")
         st.dataframe(pd.DataFrame(visible_rows), width="stretch", hide_index=True)
+
+        st.markdown("**模組開放設定**")
+        st.caption("管理者永遠可看到全部模組；下列設定用來決定其他使用者在同一網址可看到與操作哪些專頁。")
+        current_permissions = load_module_permissions()
+        access_options = list(ACCESS_LABELS.keys())
+        with st.form("module_permissions_form"):
+            next_permissions: dict[str, str] = {}
+            for group_name, pages in PAGE_GROUPS:
+                st.markdown(f"**{group_name}**")
+                cols = st.columns(2)
+                for index, page in enumerate(pages):
+                    current_value = current_permissions.get(page, DEFAULT_MODULE_ACCESS.get(page, "admin"))
+                    if page == "帳號管理" and current_value not in {"admin", "disabled"}:
+                        current_value = "admin"
+                    option_pool = ["admin", "disabled"] if page == "帳號管理" else access_options
+                    next_permissions[page] = cols[index % 2].selectbox(
+                        page,
+                        option_pool,
+                        index=option_pool.index(current_value) if current_value in option_pool else 0,
+                        format_func=lambda value: ACCESS_LABELS.get(value, value),
+                        key=f"module_access_{page}",
+                    )
+            p1, p2 = st.columns([1, 1])
+            save_permissions = p1.form_submit_button("儲存模組權限", type="primary", width="stretch")
+            reset_permissions = p2.form_submit_button("恢復預設權限", width="stretch")
+        if save_permissions:
+            save_module_permissions(next_permissions)
+            st.session_state.module_permissions = load_module_permissions()
+            st.success("模組權限已更新。")
+            st.rerun()
+        if reset_permissions:
+            save_module_permissions(default_module_permissions())
+            st.session_state.module_permissions = load_module_permissions()
+            st.success("已恢復預設模組權限。")
+            st.rerun()
 
         st.markdown("**新增帳號**")
         with st.form("create_auth_user"):
