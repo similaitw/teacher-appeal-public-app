@@ -1,7 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { Anchor, ArrowLeft, BookOpenText, FileText, ListTree, ShieldCheck, X } from "lucide-react";
+import {
+  Anchor,
+  ArrowLeft,
+  BookOpenText,
+  FileText,
+  ListTree,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { AuthMenu } from "../auth-menu";
@@ -156,6 +166,7 @@ export default function AnalysisPage() {
   const [query, setQuery] = useState("");
   const [selectedRunId, setSelectedRunId] = useState("");
   const [activeRef, setActiveRef] = useState<SourceRef | null>(null);
+  const [showRunList, setShowRunList] = useState(false);
 
   useEffect(() => {
     async function loadIndex() {
@@ -266,7 +277,19 @@ export default function AnalysisPage() {
               <div className="section-kicker">PUBLIC AI RESULTS</div>
               <h1 className="workspace-title">公開 AI 分析結果</h1>
             </div>
-            <div className="workspace-role">共 {state.index.runCount} 筆</div>
+            <div className="summary-actions">
+              <button
+                className="button secondary compact-button"
+                type="button"
+                onClick={() => setShowRunList((value) => !value)}
+                aria-expanded={showRunList}
+                aria-controls="analysis-run-list"
+              >
+                {showRunList ? <PanelLeftClose size={17} aria-hidden="true" /> : <PanelLeftOpen size={17} aria-hidden="true" />}
+                {showRunList ? "隱藏案件清單" : "顯示案件清單"}
+              </button>
+              <div className="workspace-role">共 {state.index.runCount} 筆</div>
+            </div>
           </div>
           <div className="local-note">
             <ShieldCheck size={18} aria-hidden="true" />
@@ -274,8 +297,9 @@ export default function AnalysisPage() {
           </div>
         </section>
 
-        <section className="analysis-layout">
-          <aside className="analysis-list-panel" aria-label="公開分析清單">
+        <section className={`analysis-layout${showRunList ? "" : " list-hidden"}`}>
+          {showRunList ? (
+          <aside className="analysis-list-panel" id="analysis-run-list" aria-label="公開分析清單">
             <label className="field analysis-search">
               <FileText size={18} aria-hidden="true" />
               <input
@@ -304,6 +328,7 @@ export default function AnalysisPage() {
               ))}
             </div>
           </aside>
+          ) : null}
 
           <section className="analysis-reader" aria-label="公開 AI 分析內容">
             {selectedIndexItem ? (

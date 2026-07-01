@@ -155,6 +155,19 @@ select {
   font-size: 0.88rem;
 }
 
+.summary-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.compact-button {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
 .workspace-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -640,6 +653,10 @@ select {
   min-width: 0;
 }
 
+.analysis-layout.list-hidden {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .analysis-layout > * {
   min-width: 0;
 }
@@ -1022,9 +1039,15 @@ select {
   }
 
   .workspace-head,
-  .local-note {
+  .local-note,
+  .summary-actions {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .summary-actions,
+  .summary-actions .button {
+    width: 100%;
   }
 
   .result-header {
