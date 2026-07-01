@@ -878,6 +878,11 @@ select {
   background: #e4f1eb;
 }
 
+.source-ref-button.unresolved {
+  background: #f6f3ec;
+  color: #7c5819;
+}
+
 .floating-reference {
   position: fixed;
   right: 22px;
@@ -889,7 +894,7 @@ select {
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 18px 52px rgba(34, 49, 43, 0.18);
   padding: 14px;
-  transform: translateY(calc(100% - 54px));
+  transform: translateY(0);
   transition:
     transform 0.18s ease,
     box-shadow 0.18s ease;
@@ -943,7 +948,7 @@ select {
 .reference-body dl {
   display: grid;
   gap: 10px;
-  margin: 0;
+  margin: 0 0 12px;
 }
 
 .reference-body dt {
@@ -954,6 +959,63 @@ select {
 .reference-body dd {
   margin: 2px 0 0;
   overflow-wrap: anywhere;
+}
+
+.reference-source-list {
+  display: grid;
+  gap: 10px;
+  max-height: min(52vh, 440px);
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.reference-source-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f9fbf9;
+  padding: 12px;
+}
+
+.reference-source-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-bottom: 7px;
+}
+
+.reference-source-meta span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  padding: 3px 7px;
+}
+
+.reference-source-card p {
+  color: #26362f;
+  line-height: 1.75;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.reference-case-link {
+  display: inline-flex;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: var(--accent-strong);
+  font-size: 0.86rem;
+  font-weight: 800;
+  margin-top: 10px;
+  padding: 7px 10px;
+}
+
+.reference-missing {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  line-height: 1.7;
+  padding: 12px;
 }
 
 .loading {

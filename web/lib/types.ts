@@ -61,10 +61,22 @@ export type PublicAnalysisIndex = {
   runs: PublicAnalysisIndexItem[];
 };
 
+export type PublicSourceReference = {
+  sourceId: string;
+  paragraphNo: string;
+  cid: string;
+  caseTitle: string;
+  caseHref: string;
+  section: string;
+  heading: string;
+  text: string;
+};
+
 export type PublicAnalysisRun = Omit<PublicAnalysisIndexItem, "excerpt" | "href" | "dataPath"> & {
   scope: "public_bundle";
   aiResponse: string;
   citationReview: string;
   notes: string;
+  sourceReferences?: Record<string, PublicSourceReference[]>;
   notesSha256: string;
 };

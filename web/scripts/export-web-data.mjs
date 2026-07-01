@@ -70,6 +70,87 @@ function publicAnalysisCaseTitles(caseIds, caseIndexByCid) {
   });
 }
 
+function sourceKeysFromText(text) {
+  const keys = new Set();
+  const pattern = /\[來源：([^，,\] ]+)，第([^段\]]+)段\]/g;
+  for (const match of text.matchAll(pattern)) {
+    keys.add(`${normalizeText(match[1])}:${normalizeText(match[2])}`);
+  }
+  return keys;
+}
+
+function parseSourceContextParagraphs(contextText) {
+  const paragraphs = new Map();
+  const pattern = /### 第\s*(\d+)\s*段\s*\n+\[來源：([^，,\] ]+)，第[^\]]+段\]\s*\n+([\s\S]*?)(?=\n### 第\s*\d+\s*段|\n# |\s*$)/g;
+  for (const match of contextText.matchAll(pattern)) {
+    const paragraphNo = normalizeText(match[1]);
+    const sourceId = normalizeText(match[2]);
+    const text = normalizeText(match[3]);
+    if (sourceId && paragraphNo && text) {
+      paragraphs.set(`${sourceId}:${paragraphNo}`, text);
+    }
+  }
+  return paragraphs;
+}
+
+function parseCsvText(csvText) {
+  if (!csvText.trim()) return [];
+  return parse(csvText, {
+    columns: true,
+    bom: true,
+    relax_quotes: true,
+    skip_empty_lines: true,
+  });
+}
+
+function exportSourceReferences(manifest, aiResponse, caseIndexByCid) {
+  const wantedKeys = sourceKeysFromText(aiResponse);
+  if (!wantedKeys.size || !Array.isArray(manifest.source_files)) return {};
+
+  const sourceFiles = manifest.source_files
+    .map((file) => ({
+      ...file,
+      normalizedPath: normalizePath(file.path),
+      absolutePath: path.join(repoRoot, normalizePath(file.path)),
+    }))
+    .filter((file) => file.normalizedPath.startsWith("data/ai_exports/web_ai_batches/"));
+
+  const contextsByDir = new Map();
+  for (const file of sourceFiles.filter((item) => item.role === "source_context")) {
+    const contextText = readTextIfExists(file.absolutePath);
+    contextsByDir.set(path.dirname(file.normalizedPath), parseSourceContextParagraphs(contextText));
+  }
+
+  const references = {};
+  for (const file of sourceFiles.filter((item) => item.role === "source_index")) {
+    const rows = parseCsvText(readTextIfExists(file.absolutePath));
+    const context = contextsByDir.get(path.dirname(file.normalizedPath)) || new Map();
+    for (const row of rows) {
+      const sourceId = normalizeText(row.source_id);
+      const paragraphNo = normalizeText(row.paragraph_no);
+      const key = `${sourceId}:${paragraphNo}`;
+      if (!sourceId || !paragraphNo || !wantedKeys.has(key)) continue;
+
+      const cid = normalizeText(row.cid);
+      const caseRecord = caseIndexByCid.get(cid);
+      const entry = {
+        sourceId,
+        paragraphNo,
+        cid,
+        caseTitle: caseRecord?.title || `${cid} 評議書`,
+        caseHref: cid ? `/cases/${cid}` : "",
+        section: normalizeText(row.section),
+        heading: normalizeText(row.heading),
+        text: context.get(key) || "",
+      };
+      if (!references[key]) references[key] = [];
+      references[key].push(entry);
+    }
+  }
+
+  return references;
+}
+
 function exportPublicAnalysisRuns(caseIndex, exportedAt) {
   fs.mkdirSync(analysisRunsOutputRoot, { recursive: true });
 
@@ -110,6 +191,7 @@ function exportPublicAnalysisRuns(caseIndex, exportedAt) {
 
       const citationReview = readTextIfExists(path.join(runDir, "citation_review.md"));
       const notes = readTextIfExists(path.join(runDir, "notes.md"));
+      const sourceReferences = exportSourceReferences(manifest, aiResponse, caseIndexByCid);
       const publicRun = {
         runId: normalizeText(manifest.run_id || runId),
         scope: "public_bundle",
@@ -122,6 +204,7 @@ function exportPublicAnalysisRuns(caseIndex, exportedAt) {
         aiResponse,
         citationReview,
         notes,
+        sourceReferences,
         responseSha256: normalizeText(manifest.ai_response_sha256),
         notesSha256: normalizeText(manifest.notes_sha256),
       };

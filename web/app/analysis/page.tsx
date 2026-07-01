@@ -15,7 +15,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { AuthMenu } from "../auth-menu";
-import type { PublicAnalysisIndex, PublicAnalysisRun } from "../../lib/types";
+import type { PublicAnalysisIndex, PublicAnalysisRun, PublicSourceReference } from "../../lib/types";
 
 type AnalysisState =
   | { status: "loading" }
@@ -28,6 +28,10 @@ type SourceRef = {
   sourceId: string;
   paragraphNo: string;
   sectionTitle: string;
+};
+
+type ActiveSourceRef = SourceRef & {
+  references: PublicSourceReference[];
 };
 
 type AnalysisSection = {
@@ -125,7 +129,8 @@ function asciiTreeForSections(sections: AnalysisSection[]) {
 function renderLineWithRefs(
   line: string,
   section: AnalysisSection,
-  onSelectRef: (ref: SourceRef) => void,
+  sourceReferences: Record<string, PublicSourceReference[]> | undefined,
+  onSelectRef: (ref: ActiveSourceRef) => void,
 ) {
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -142,8 +147,16 @@ function renderLineWithRefs(
       paragraphNo: match[2],
       sectionTitle: section.title,
     };
+    const refKey = `${ref.sourceId}:${ref.paragraphNo}`;
+    const references = sourceReferences?.[refKey] || [];
     parts.push(
-      <button className="source-ref-button" key={ref.id} type="button" onClick={() => onSelectRef(ref)}>
+      <button
+        className={`source-ref-button${references.length ? "" : " unresolved"}`}
+        key={ref.id}
+        type="button"
+        onClick={() => onSelectRef({ ...ref, references })}
+        title={references.length ? "查看公開原文段落" : "尚未找到對應原文段落"}
+      >
         {match[1]}:{match[2]}
       </button>,
     );
@@ -165,7 +178,7 @@ export default function AnalysisPage() {
   const [state, setState] = useState<AnalysisState>({ status: "loading" });
   const [query, setQuery] = useState("");
   const [selectedRunId, setSelectedRunId] = useState("");
-  const [activeRef, setActiveRef] = useState<SourceRef | null>(null);
+  const [activeRef, setActiveRef] = useState<ActiveSourceRef | null>(null);
   const [showRunList, setShowRunList] = useState(false);
 
   useEffect(() => {
@@ -388,7 +401,7 @@ export default function AnalysisPage() {
                             <div className="analysis-paragraphs">
                               {section.lines.filter(Boolean).map((line, index) => (
                                 <p key={`${section.id}-${index}`}>
-                                  {renderLineWithRefs(line, section, setActiveRef)}
+                                  {renderLineWithRefs(line, section, selectedRun.sourceReferences, setActiveRef)}
                                 </p>
                               ))}
                             </div>
@@ -401,8 +414,8 @@ export default function AnalysisPage() {
                   </article>
                 </div>
 
-                {selectedRun ? (
-                  <aside className={`floating-reference${activeRef ? " open" : ""}`} aria-label="浮動補充視窗">
+                {selectedRun && activeRef ? (
+                  <aside className="floating-reference open" aria-label="浮動補充視窗">
                     <div className="floating-reference-head">
                       <div>
                         <div className="section-kicker">REFERENCE</div>
@@ -412,29 +425,37 @@ export default function AnalysisPage() {
                         <X size={18} aria-hidden="true" />
                       </button>
                     </div>
-                    {activeRef ? (
-                      <div className="reference-body">
-                        <div className="source-badge">{activeRef.sourceId}</div>
-                        <dl>
-                          <div>
-                            <dt>參照錨點</dt>
-                            <dd>{activeRef.label}</dd>
-                          </div>
-                          <div>
-                            <dt>段落</dt>
-                            <dd>第 {activeRef.paragraphNo} 段</dd>
-                          </div>
-                          <div>
-                            <dt>所在章節</dt>
-                            <dd>{activeRef.sectionTitle}</dd>
-                          </div>
-                        </dl>
-                      </div>
-                    ) : (
-                      <div className="reference-body muted">
-                        點選回覆中的來源標記，可在這裡保留參照資訊。
-                      </div>
-                    )}
+                    <div className="reference-body">
+                      <div className="source-badge">{activeRef.sourceId}:{activeRef.paragraphNo}</div>
+                      <dl>
+                        <div>
+                          <dt>AI 回覆所在章節</dt>
+                          <dd>{activeRef.sectionTitle}</dd>
+                        </div>
+                      </dl>
+                      {activeRef.references.length ? (
+                        <div className="reference-source-list">
+                          {activeRef.references.map((reference, index) => (
+                            <section className="reference-source-card" key={`${reference.cid}-${reference.sourceId}-${reference.paragraphNo}-${index}`}>
+                              <div className="reference-source-meta">
+                                <span>{reference.cid}</span>
+                                <span>{reference.section || reference.heading || "原文段落"}</span>
+                              </div>
+                              <p>{reference.text || "此段公開原文尚未匯出。"}</p>
+                              {reference.caseHref ? (
+                                <Link className="reference-case-link" href={reference.caseHref}>
+                                  開啟公開案件原文
+                                </Link>
+                              ) : null}
+                            </section>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="reference-missing">
+                          尚未找到這個參照錨點的公開原文段落。若這是多案件比較結果，可能需要回到本機來源包核對。
+                        </div>
+                      )}
+                    </div>
                   </aside>
                 ) : null}
 
