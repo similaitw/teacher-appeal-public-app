@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpenText, RefreshCcw, Search, SlidersHorizontal } from "lucide-react";
+import { BookOpenText, MonitorCog, RefreshCcw, Search, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { AuthMenu } from "./auth-menu";
+import { AuthMenu, ROLE_LABELS, type Role } from "./auth-menu";
 import type { CaseIndexItem, Manifest } from "../lib/types";
 
 type DataState =
@@ -16,12 +16,74 @@ function includesValue(value: string, needle: string) {
   return value.toLocaleLowerCase("zh-Hant").includes(needle.toLocaleLowerCase("zh-Hant"));
 }
 
+const ROLE_WEIGHT: Record<Role, number> = {
+  guest: 0,
+  public: 1,
+  private: 2,
+  admin: 3,
+};
+
+const ONLINE_MODULES: Array<{
+  title: string;
+  status: "online" | "local";
+  role: Role;
+  detail: string;
+}> = [
+  {
+    title: "公開評議書搜尋",
+    status: "online",
+    role: "guest",
+    detail: "關鍵字、年度、結果與案由篩選已在此站上線。",
+  },
+  {
+    title: "公開案件閱讀",
+    status: "online",
+    role: "guest",
+    detail: "公開案件全文頁已靜態部署，可直接分享連結。",
+  },
+  {
+    title: "公開 AI 上傳包",
+    status: "online",
+    role: "public",
+    detail: "線上提供案件選取與來源整理入口；實際 AI 分析仍由你指定工具執行。",
+  },
+  {
+    title: "資料狀態",
+    status: "online",
+    role: "public",
+    detail: "公開資料 manifest、案件數與更新時間可直接在雲端檢查。",
+  },
+  {
+    title: "私人案件與文件匯入",
+    status: "local",
+    role: "private",
+    detail: "會接觸 private_cases.db、uploaded_cases 與原始檔，保留在本機 Streamlit。",
+  },
+  {
+    title: "AI 批次分析與稽核",
+    status: "local",
+    role: "private",
+    detail: "ChatGPT/Gemini 瀏覽器自動化、分析結果保存與誤判稽核保留本機執行。",
+  },
+  {
+    title: "模組權限管理",
+    status: "local",
+    role: "admin",
+    detail: "正式帳號、模組權限檔與密碼雜湊保存在本機工作台。",
+  },
+];
+
+function canSeeModule(role: Role, required: Role) {
+  return ROLE_WEIGHT[role] >= ROLE_WEIGHT[required];
+}
+
 export default function HomePage() {
   const [data, setData] = useState<DataState>({ status: "loading" });
   const [query, setQuery] = useState("");
   const [issueType, setIssueType] = useState("");
   const [result, setResult] = useState("");
   const [year, setYear] = useState("");
+  const [role, setRole] = useState<Role>("guest");
 
   useEffect(() => {
     async function loadData() {
@@ -46,6 +108,21 @@ export default function HomePage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    const savedRole = window.localStorage.getItem("teacherAppealRole") as Role | null;
+    if (savedRole && savedRole in ROLE_LABELS) {
+      setRole(savedRole);
+    }
+    function handleRole(event: Event) {
+      const detail = (event as CustomEvent<Role>).detail;
+      if (detail && detail in ROLE_LABELS) {
+        setRole(detail);
+      }
+    }
+    window.addEventListener("teacher-appeal-role", handleRole);
+    return () => window.removeEventListener("teacher-appeal-role", handleRole);
+  }, []);
+
   const filteredCases = useMemo(() => {
     if (data.status !== "ready") return [];
     return data.cases.filter((item) => {
@@ -58,6 +135,7 @@ export default function HomePage() {
   }, [data, issueType, query, result, year]);
 
   const visibleCases = filteredCases.slice(0, 80);
+  const visibleModules = ONLINE_MODULES.filter((item) => canSeeModule(role, item.role));
 
   if (data.status === "loading") {
     return <div className="loading">載入公開案件資料中...</div>;
@@ -88,6 +166,31 @@ export default function HomePage() {
       </header>
 
       <div className="container">
+        <section className="workspace-band" aria-label="線上工作台">
+          <div className="workspace-head">
+            <div>
+              <div className="section-kicker">ONLINE WORKSPACE</div>
+              <h1 className="workspace-title">線上工作台</h1>
+            </div>
+            <div className="workspace-role">目前權限：{ROLE_LABELS[role]}</div>
+          </div>
+          <div className="workspace-grid">
+            {visibleModules.map((item) => (
+              <div className="workspace-module" key={item.title}>
+                <div className={`module-status ${item.status}`}>
+                  {item.status === "online" ? "已上線" : "本機執行"}
+                </div>
+                <h2>{item.title}</h2>
+                <p>{item.detail}</p>
+              </div>
+            ))}
+          </div>
+          <div className="local-note">
+            <MonitorCog size={18} aria-hidden="true" />
+            分析執行、私人文件與瀏覽器自動化保留在本機；線上站提供公開資料、入口與狀態。
+          </div>
+        </section>
+
         <section className="stats" aria-label="資料概況">
           <div className="stat">
             <div className="stat-label">公開案件</div>

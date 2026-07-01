@@ -12,6 +12,13 @@ const ROLE_LABELS: Record<Role, string> = {
   admin: "管理者",
 };
 
+export type { Role };
+export { ROLE_LABELS };
+
+function publishRole(role: Role) {
+  window.dispatchEvent(new CustomEvent("teacher-appeal-role", { detail: role }));
+}
+
 const MODULES: Array<{ name: string; minimumRole: Role }> = [
   { name: "公開評議書搜尋", minimumRole: "guest" },
   { name: "公開案件閱讀", minimumRole: "guest" },
@@ -45,6 +52,7 @@ export function AuthMenu() {
     const savedRole = window.localStorage.getItem("teacherAppealRole") as Role | null;
     if (savedRole && savedRole in ROLE_LABELS) {
       setRole(savedRole);
+      publishRole(savedRole);
     }
   }, []);
 
@@ -67,6 +75,7 @@ export function AuthMenu() {
     const nextRole = normalized as Exclude<Role, "guest">;
     setRole(nextRole);
     window.localStorage.setItem("teacherAppealRole", nextRole);
+    publishRole(nextRole);
     setPassword("");
     setMessage("已登入。");
   }
@@ -74,6 +83,7 @@ export function AuthMenu() {
   function logout() {
     setRole("guest");
     window.localStorage.removeItem("teacherAppealRole");
+    publishRole("guest");
     setPassword("");
     setMessage("已登出。");
   }
