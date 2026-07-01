@@ -297,19 +297,7 @@ export default function AnalysisPage() {
               <div className="section-kicker">PUBLIC AI RESULTS</div>
               <h1 className="workspace-title">公開 AI 分析結果</h1>
             </div>
-            <div className="summary-actions">
-              <button
-                className="button secondary compact-button"
-                type="button"
-                onClick={() => setShowRunList((value) => !value)}
-                aria-expanded={showRunList}
-                aria-controls="analysis-run-list"
-              >
-                {showRunList ? <PanelLeftClose size={17} aria-hidden="true" /> : <PanelLeftOpen size={17} aria-hidden="true" />}
-                {showRunList ? "隱藏案件清單" : "顯示案件清單"}
-              </button>
-              <div className="workspace-role">共 {state.index.runCount} 筆</div>
-            </div>
+            <div className="workspace-role">共 {state.index.runCount} 筆</div>
           </div>
           <div className="local-note">
             <ShieldCheck size={18} aria-hidden="true" />
@@ -318,41 +306,55 @@ export default function AnalysisPage() {
         </section>
 
         <section className={`analysis-layout${showRunList ? "" : " list-hidden"}`}>
-          {showRunList ? (
-          <aside className="analysis-list-panel" id="analysis-run-list" aria-label="公開分析清單">
-            <label className="field analysis-search">
-              <FileText size={18} aria-hidden="true" />
-              <input
-                ref={searchInputRef}
-                className="input with-icon"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="搜尋 run、案號或摘要"
-                aria-label="搜尋公開 AI 分析結果"
-              />
-            </label>
-
-            <div className="analysis-list">
-              {filteredRuns.map((run) => (
-                <button
-                  className={`analysis-list-item${run.runId === selectedRunId ? " active" : ""}`}
-                  key={run.runId}
-                  type="button"
-                  onClick={() => {
-                    setSelectedRunId(run.runId);
-                    setShowRunList(false);
-                  }}
-                >
-                  <span className="analysis-item-meta">
-                    {formatDate(run.analysisTime)} · {run.provider || "AI"}
-                  </span>
-                  <span className="analysis-item-title">{run.cases.map((item) => item.cid).join("、")}</span>
-                  <span className="analysis-item-excerpt">{run.excerpt || "尚無摘要"}</span>
-                </button>
-              ))}
+          <aside className={`analysis-list-panel${showRunList ? "" : " collapsed"}`} id="analysis-run-list" aria-label="公開分析清單">
+            <div className="analysis-list-controls">
+              {showRunList ? (
+                <label className="field analysis-search">
+                  <FileText size={18} aria-hidden="true" />
+                  <input
+                    ref={searchInputRef}
+                    className="input with-icon"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="搜尋 run、案號或摘要"
+                    aria-label="搜尋公開 AI 分析結果"
+                  />
+                </label>
+              ) : null}
+              <button
+                className="button secondary compact-button list-toggle-button"
+                type="button"
+                onClick={() => setShowRunList((value) => !value)}
+                aria-expanded={showRunList}
+                aria-controls="analysis-run-list"
+              >
+                {showRunList ? <PanelLeftClose size={17} aria-hidden="true" /> : <PanelLeftOpen size={17} aria-hidden="true" />}
+                {showRunList ? "隱藏案件清單" : "顯示案件清單"}
+              </button>
             </div>
+
+            {showRunList ? (
+              <div className="analysis-list">
+                {filteredRuns.map((run) => (
+                  <button
+                    className={`analysis-list-item${run.runId === selectedRunId ? " active" : ""}`}
+                    key={run.runId}
+                    type="button"
+                    onClick={() => {
+                      setSelectedRunId(run.runId);
+                      setShowRunList(false);
+                    }}
+                  >
+                    <span className="analysis-item-meta">
+                      {formatDate(run.analysisTime)} · {run.provider || "AI"}
+                    </span>
+                    <span className="analysis-item-title">{run.cases.map((item) => item.cid).join("、")}</span>
+                    <span className="analysis-item-excerpt">{run.excerpt || "尚無摘要"}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </aside>
-          ) : null}
 
           <section className="analysis-reader" aria-label="公開 AI 分析內容">
             {selectedIndexItem ? (

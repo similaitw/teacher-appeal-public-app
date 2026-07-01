@@ -155,14 +155,6 @@ select {
   font-size: 0.88rem;
 }
 
-.summary-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
 .compact-button {
   min-height: 38px;
   white-space: nowrap;
@@ -662,7 +654,7 @@ select {
 }
 
 .analysis-layout.list-hidden {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 176px minmax(0, 1fr);
 }
 
 .analysis-layout > * {
@@ -674,6 +666,19 @@ select {
   top: 86px;
   display: grid;
   gap: 12px;
+}
+
+.analysis-list-panel.collapsed {
+  align-self: start;
+}
+
+.analysis-list-controls {
+  display: grid;
+  gap: 8px;
+}
+
+.list-toggle-button {
+  width: 100%;
 }
 
 .analysis-search {
@@ -1109,15 +1114,9 @@ select {
   }
 
   .workspace-head,
-  .local-note,
-  .summary-actions {
+  .local-note {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .summary-actions,
-  .summary-actions .button {
-    width: 100%;
   }
 
   .result-header {
