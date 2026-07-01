@@ -28,6 +28,7 @@ const ONLINE_MODULES: Array<{
   status: "online" | "local";
   role: Role;
   detail: string;
+  href?: string;
 }> = [
   {
     title: "公開評議書搜尋",
@@ -46,6 +47,13 @@ const ONLINE_MODULES: Array<{
     status: "online",
     role: "public",
     detail: "線上提供案件選取與來源整理入口；實際 AI 分析仍由你指定工具執行。",
+  },
+  {
+    title: "公開 AI 分析結果",
+    status: "online",
+    role: "guest",
+    detail: "已保存的公開案件 AI 回覆可在雲端閱讀；僅匯出 public bundle 結果。",
+    href: "/analysis",
   },
   {
     title: "資料狀態",
@@ -175,15 +183,26 @@ export default function HomePage() {
             <div className="workspace-role">目前權限：{ROLE_LABELS[role]}</div>
           </div>
           <div className="workspace-grid">
-            {visibleModules.map((item) => (
-              <div className="workspace-module" key={item.title}>
-                <div className={`module-status ${item.status}`}>
-                  {item.status === "online" ? "已上線" : "本機執行"}
+            {visibleModules.map((item) => {
+              const content = (
+                <>
+                  <div className={`module-status ${item.status}`}>
+                    {item.status === "online" ? "已上線" : "本機執行"}
+                  </div>
+                  <h2>{item.title}</h2>
+                  <p>{item.detail}</p>
+                </>
+              );
+              return item.href ? (
+                <Link className="workspace-module workspace-module-link" href={item.href} key={item.title}>
+                  {content}
+                </Link>
+              ) : (
+                <div className="workspace-module" key={item.title}>
+                  {content}
                 </div>
-                <h2>{item.title}</h2>
-                <p>{item.detail}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div className="local-note">
             <MonitorCog size={18} aria-hidden="true" />

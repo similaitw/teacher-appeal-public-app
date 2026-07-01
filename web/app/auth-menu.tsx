@@ -23,9 +23,10 @@ const MODULES: Array<{ name: string; minimumRole: Role }> = [
   { name: "公開評議書搜尋", minimumRole: "guest" },
   { name: "公開案件閱讀", minimumRole: "guest" },
   { name: "公開 AI 分析包", minimumRole: "guest" },
+  { name: "公開 AI 分析結果", minimumRole: "guest" },
   { name: "私人案件管理", minimumRole: "private" },
   { name: "文件匯入", minimumRole: "private" },
-  { name: "AI 分析結果", minimumRole: "private" },
+  { name: "私人 AI 分析結果", minimumRole: "private" },
   { name: "批次儀表板", minimumRole: "private" },
   { name: "模組權限管理", minimumRole: "admin" },
 ];

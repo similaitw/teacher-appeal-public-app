@@ -162,11 +162,25 @@ select {
 }
 
 .workspace-module {
+  display: block;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 13px;
   background: #fff;
   min-height: 142px;
+}
+
+.workspace-module-link {
+  transition:
+    border-color 0.16s ease,
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.workspace-module-link:hover {
+  border-color: rgba(29, 111, 91, 0.45);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
 }
 
 .workspace-module h2 {
@@ -572,6 +586,7 @@ select {
   border-radius: 8px;
   padding: clamp(18px, 3vw, 28px);
   box-shadow: var(--shadow);
+  min-width: 0;
 }
 
 .source-grid {
@@ -606,6 +621,101 @@ select {
   font-size: 1rem;
 }
 
+.analysis-summary {
+  margin-bottom: 16px;
+}
+
+.analysis-layout {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  min-width: 0;
+}
+
+.analysis-layout > * {
+  min-width: 0;
+}
+
+.analysis-list-panel {
+  position: sticky;
+  top: 86px;
+  display: grid;
+  gap: 12px;
+}
+
+.analysis-search {
+  display: block;
+}
+
+.analysis-list {
+  display: grid;
+  gap: 8px;
+  max-height: calc(100vh - 172px);
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.analysis-list-item {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  text-align: left;
+}
+
+.analysis-list-item:hover,
+.analysis-list-item.active {
+  border-color: rgba(29, 111, 91, 0.52);
+  background: #f9fbf9;
+}
+
+.analysis-item-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.analysis-item-title {
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.analysis-item-excerpt {
+  color: #405149;
+  display: -webkit-box;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  overflow: hidden;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.analysis-reader {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.analysis-meta-card {
+  box-shadow: none;
+}
+
+.analysis-case-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.analysis-response {
+  padding: clamp(16px, 2.5vw, 22px);
+}
+
 .loading {
   min-height: 50vh;
   display: grid;
@@ -626,6 +736,18 @@ select {
 
   .content-grid {
     grid-template-columns: 1fr;
+  }
+
+  .analysis-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-list-panel {
+    position: static;
+  }
+
+  .analysis-list {
+    max-height: 420px;
   }
 }
 

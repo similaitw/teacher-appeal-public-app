@@ -7,8 +7,11 @@ const webRoot = path.resolve(process.cwd());
 const repoRoot = path.resolve(webRoot, "..");
 const dataRoot = path.join(repoRoot, "data");
 const csvPath = path.join(dataRoot, "cases.csv");
+const analysisRunsRoot = path.join(dataRoot, "ai_exports", "analysis_runs");
 const outputRoot = path.join(webRoot, "public", "data");
 const casesOutputRoot = path.join(outputRoot, "cases");
+const analysisOutputRoot = path.join(outputRoot, "analysis");
+const analysisRunsOutputRoot = path.join(analysisOutputRoot, "runs");
 const checkOnly = process.argv.includes("--check");
 
 function normalizeText(value) {
@@ -37,10 +40,132 @@ function excerptFromText(text) {
   return cleaned.slice(0, 220);
 }
 
+function readJsonIfExists(filePath) {
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function readTextIfExists(filePath) {
+  return fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : "";
+}
+
 function uniqueSorted(values) {
   return [...new Set(values.map(normalizeText).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b, "zh-Hant"),
   );
+}
+
+function publicAnalysisCaseTitles(caseIds, caseIndexByCid) {
+  return caseIds.map((cid) => {
+    const record = caseIndexByCid.get(cid);
+    return {
+      cid,
+      title: record?.title || `${cid} 評議書`,
+      href: `/cases/${cid}`,
+    };
+  });
+}
+
+function exportPublicAnalysisRuns(caseIndex, exportedAt) {
+  fs.mkdirSync(analysisRunsOutputRoot, { recursive: true });
+
+  const caseIndexByCid = new Map(caseIndex.map((item) => [item.cid, item]));
+  const runs = [];
+  const skipped = [];
+
+  if (fs.existsSync(analysisRunsRoot)) {
+    const runDirs = fs
+      .readdirSync(analysisRunsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()
+      .reverse();
+
+    for (const runId of runDirs) {
+      const runDir = path.join(analysisRunsRoot, runId);
+      const manifest = readJsonIfExists(path.join(runDir, "input_manifest.json"));
+      if (!manifest || manifest.scope !== "public_bundle") {
+        skipped.push(runId);
+        continue;
+      }
+
+      const caseIds = Array.isArray(manifest.case_ids)
+        ? manifest.case_ids.map((cid) => normalizeText(cid)).filter(Boolean)
+        : [];
+      const hasOnlyPublicCases = caseIds.length > 0 && caseIds.every((cid) => caseIndexByCid.has(cid));
+      if (!hasOnlyPublicCases) {
+        skipped.push(runId);
+        continue;
+      }
+
+      const aiResponse = readTextIfExists(path.join(runDir, "ai_response.md"));
+      if (!aiResponse.trim()) {
+        skipped.push(runId);
+        continue;
+      }
+
+      const citationReview = readTextIfExists(path.join(runDir, "citation_review.md"));
+      const notes = readTextIfExists(path.join(runDir, "notes.md"));
+      const publicRun = {
+        runId: normalizeText(manifest.run_id || runId),
+        scope: "public_bundle",
+        provider: normalizeText(manifest.provider),
+        modelName: normalizeText(manifest.model_name),
+        analysisTime: normalizeText(manifest.analysis_time),
+        caseIds,
+        caseCount: Number(manifest.case_count || caseIds.length),
+        cases: publicAnalysisCaseTitles(caseIds, caseIndexByCid),
+        aiResponse,
+        citationReview,
+        notes,
+        responseSha256: normalizeText(manifest.ai_response_sha256),
+        notesSha256: normalizeText(manifest.notes_sha256),
+      };
+
+      fs.writeFileSync(
+        path.join(analysisRunsOutputRoot, `${publicRun.runId}.json`),
+        JSON.stringify(publicRun),
+      );
+
+      runs.push({
+        runId: publicRun.runId,
+        provider: publicRun.provider,
+        modelName: publicRun.modelName,
+        analysisTime: publicRun.analysisTime,
+        caseIds: publicRun.caseIds,
+        caseCount: publicRun.caseCount,
+        cases: publicRun.cases,
+        excerpt: excerptFromText(aiResponse),
+        responseSha256: publicRun.responseSha256,
+        href: `/analysis?run=${encodeURIComponent(publicRun.runId)}`,
+        dataPath: `/data/analysis/runs/${publicRun.runId}.json`,
+      });
+    }
+  }
+
+  runs.sort((a, b) => String(b.analysisTime).localeCompare(String(a.analysisTime)));
+
+  fs.writeFileSync(
+    path.join(analysisOutputRoot, "index.json"),
+    JSON.stringify(
+      {
+        generatedAt: exportedAt,
+        runCount: runs.length,
+        source: "data/ai_exports/analysis_runs public_bundle only",
+        privacyRule: "Only scope=public_bundle runs with public case ids are exported. Private analysis runs and source file paths are excluded.",
+        skippedCount: skipped.length,
+        runs,
+      },
+      null,
+      2,
+    ),
+  );
+
+  return { exported: runs.length, skipped: skipped.length };
 }
 
 if (!fs.existsSync(csvPath)) {
@@ -156,6 +281,7 @@ const manifest = {
 
 fs.writeFileSync(path.join(outputRoot, "cases-index.json"), JSON.stringify(index));
 fs.writeFileSync(path.join(outputRoot, "manifest.json"), JSON.stringify(manifest, null, 2));
+const analysisExport = exportPublicAnalysisRuns(index, exportedAt);
 
 const caseFiles = fs.readdirSync(casesOutputRoot).filter((name) => name.endsWith(".json"));
 const errors = [];
@@ -174,6 +300,7 @@ if (errors.length) {
   process.exitCode = 1;
 } else {
   console.log(`Exported ${index.length} public cases to ${path.relative(repoRoot, outputRoot)}`);
+  console.log(`Exported ${analysisExport.exported} public AI analysis runs; skipped ${analysisExport.skipped}.`);
 }
 
 if (checkOnly && !errors.length) {

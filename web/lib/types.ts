@@ -31,3 +31,40 @@ export type Manifest = {
   results: string[];
   years: string[];
 };
+
+export type PublicAnalysisCaseRef = {
+  cid: string;
+  title: string;
+  href: string;
+};
+
+export type PublicAnalysisIndexItem = {
+  runId: string;
+  provider: string;
+  modelName: string;
+  analysisTime: string;
+  caseIds: string[];
+  caseCount: number;
+  cases: PublicAnalysisCaseRef[];
+  excerpt: string;
+  responseSha256: string;
+  href: string;
+  dataPath: string;
+};
+
+export type PublicAnalysisIndex = {
+  generatedAt: string;
+  runCount: number;
+  source: string;
+  privacyRule: string;
+  skippedCount: number;
+  runs: PublicAnalysisIndexItem[];
+};
+
+export type PublicAnalysisRun = Omit<PublicAnalysisIndexItem, "excerpt" | "href" | "dataPath"> & {
+  scope: "public_bundle";
+  aiResponse: string;
+  citationReview: string;
+  notes: string;
+  notesSha256: string;
+};
