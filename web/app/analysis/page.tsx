@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, BookOpenText, FileText, ShieldCheck } from "lucide-react";
+import { Anchor, ArrowLeft, BookOpenText, FileText, ListTree, ShieldCheck, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type React from "react";
 import { AuthMenu } from "../auth-menu";
 import type { PublicAnalysisIndex, PublicAnalysisRun } from "../../lib/types";
 
@@ -11,11 +12,138 @@ type AnalysisState =
   | { status: "ready"; index: PublicAnalysisIndex; selectedRun: PublicAnalysisRun | null }
   | { status: "error"; message: string };
 
+type SourceRef = {
+  id: string;
+  label: string;
+  sourceId: string;
+  paragraphNo: string;
+  sectionTitle: string;
+};
+
+type AnalysisSection = {
+  id: string;
+  title: string;
+  level: number;
+  lines: string[];
+  sourceRefs: SourceRef[];
+};
+
+const SOURCE_REF_PATTERN = /\[來源：([^，,\] ]+)，第([^段\]]+)段\]/g;
+
 function formatDate(value: string) {
   if (!value) return "未記錄";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("zh-TW");
+}
+
+function normalizeHeading(line: string) {
+  const trimmed = line.trim();
+  const markdown = trimmed.match(/^(#{1,4})\s+(.+)$/);
+  if (markdown) {
+    return { level: markdown[1].length, title: markdown[2].trim() };
+  }
+  const numbered = trimmed.match(/^((?:\d+|[一二三四五六七八九十]+)[.、])\s*(.+)$/);
+  if (numbered && trimmed.length <= 48) {
+    return { level: numbered[1].includes(".") ? 2 : 1, title: trimmed };
+  }
+  const shortLabel = trimmed.match(/^(案件基本資料|程序與時間軸|事件時間軸|申訴人主張|學校主張|證據|爭點|分析|理由|結論|引用核對|待補資料)[:：]?$/);
+  if (shortLabel) {
+    return { level: 1, title: trimmed.replace(/[:：]$/, "") };
+  }
+  return null;
+}
+
+function sourceRefsInLine(line: string, sectionId: string, sectionTitle: string) {
+  const refs: SourceRef[] = [];
+  for (const match of line.matchAll(SOURCE_REF_PATTERN)) {
+    refs.push({
+      id: `${sectionId}-source-${refs.length}-${match.index || 0}`,
+      label: match[0],
+      sourceId: match[1],
+      paragraphNo: match[2],
+      sectionTitle,
+    });
+  }
+  return refs;
+}
+
+function parseAnalysisSections(text: string) {
+  const rawLines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  const sections: AnalysisSection[] = [];
+  let current: AnalysisSection | null = null;
+
+  function openSection(title: string, level: number) {
+    const id = `analysis-section-${sections.length + 1}`;
+    current = { id, title, level, lines: [], sourceRefs: [] };
+    sections.push(current);
+    return current;
+  }
+
+  for (const rawLine of rawLines) {
+    const line = rawLine.trimEnd();
+    const heading = normalizeHeading(line);
+    if (heading) {
+      openSection(heading.title, heading.level);
+      continue;
+    }
+    if (!current) {
+      current = openSection("總覽", 1);
+    }
+    current.lines.push(line);
+  }
+
+  for (const section of sections) {
+    section.sourceRefs = section.lines.flatMap((line) => sourceRefsInLine(line, section.id, section.title));
+  }
+
+  return sections.length ? sections : [{ id: "analysis-section-1", title: "總覽", level: 1, lines: [text], sourceRefs: [] }];
+}
+
+function asciiTreeForSections(sections: AnalysisSection[]) {
+  if (!sections.length) return "AI 回覆";
+  const rows = ["AI 回覆"];
+  sections.forEach((section, index) => {
+    const branch = index === sections.length - 1 ? "`-" : "|-";
+    const indent = section.level > 1 ? "   " : "";
+    const refs = section.sourceRefs.length ? ` (${section.sourceRefs.length} refs)` : "";
+    rows.push(`${indent}${branch} ${section.title}  #${section.id}${refs}`);
+  });
+  return rows.join("\n");
+}
+
+function renderLineWithRefs(
+  line: string,
+  section: AnalysisSection,
+  onSelectRef: (ref: SourceRef) => void,
+) {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let refIndex = 0;
+  for (const match of line.matchAll(SOURCE_REF_PATTERN)) {
+    const start = match.index || 0;
+    if (start > lastIndex) {
+      parts.push(<span key={`text-${start}`}>{line.slice(lastIndex, start)}</span>);
+    }
+    const ref: SourceRef = {
+      id: `${section.id}-inline-source-${refIndex}-${start}`,
+      label: match[0],
+      sourceId: match[1],
+      paragraphNo: match[2],
+      sectionTitle: section.title,
+    };
+    parts.push(
+      <button className="source-ref-button" key={ref.id} type="button" onClick={() => onSelectRef(ref)}>
+        {match[1]}:{match[2]}
+      </button>,
+    );
+    lastIndex = start + match[0].length;
+    refIndex += 1;
+  }
+  if (lastIndex < line.length) {
+    parts.push(<span key="text-tail">{line.slice(lastIndex)}</span>);
+  }
+  return parts;
 }
 
 function selectedRunIdFromLocation() {
@@ -27,6 +155,7 @@ export default function AnalysisPage() {
   const [state, setState] = useState<AnalysisState>({ status: "loading" });
   const [query, setQuery] = useState("");
   const [selectedRunId, setSelectedRunId] = useState("");
+  const [activeRef, setActiveRef] = useState<SourceRef | null>(null);
 
   useEffect(() => {
     async function loadIndex() {
@@ -60,6 +189,7 @@ export default function AnalysisPage() {
       const selectedRun = (await response.json()) as PublicAnalysisRun;
       if (!cancelled) {
         setState((current) => (current.status === "ready" ? { ...current, selectedRun } : current));
+        setActiveRef(null);
         window.history.replaceState(null, "", `/analysis?run=${encodeURIComponent(selectedRun.runId)}`);
       }
     }
@@ -92,6 +222,11 @@ export default function AnalysisPage() {
     state.status === "ready" && state.selectedRun?.runId === selectedRunId ? state.selectedRun : null;
   const selectedIndexItem =
     state.status === "ready" ? state.index.runs.find((run) => run.runId === selectedRunId) : undefined;
+  const analysisSections = useMemo(
+    () => (selectedRun ? parseAnalysisSections(selectedRun.aiResponse) : []),
+    [selectedRun],
+  );
+  const asciiTree = useMemo(() => asciiTreeForSections(analysisSections), [analysisSections]);
 
   if (state.status === "loading") {
     return <div className="loading">載入公開 AI 分析結果中...</div>;
@@ -190,14 +325,93 @@ export default function AnalysisPage() {
                   </div>
                 </div>
 
-                <article className="reader-card analysis-response">
-                  <h2 className="panel-title">AI 回覆</h2>
-                  {selectedRun ? (
-                    <div className="document-text">{selectedRun.aiResponse}</div>
-                  ) : (
-                    <div className="empty">載入分析內容中...</div>
-                  )}
-                </article>
+                <div className="analysis-reading-grid">
+                  <aside className="reader-card analysis-outline" aria-label="AI 回覆目錄">
+                    <h2 className="panel-title">
+                      <ListTree size={17} aria-hidden="true" />
+                      ASCII 樹狀結構
+                    </h2>
+                    {selectedRun ? (
+                      <>
+                        <pre className="ascii-tree">{asciiTree}</pre>
+                        <div className="anchor-list">
+                          {analysisSections.map((section) => (
+                            <a className="anchor-link" href={`#${section.id}`} key={section.id}>
+                              <Anchor size={14} aria-hidden="true" />
+                              {section.title}
+                            </a>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="empty compact">載入目錄中...</div>
+                    )}
+                  </aside>
+
+                  <article className="reader-card analysis-response structured-response">
+                    <h2 className="panel-title">AI 回覆</h2>
+                    {selectedRun ? (
+                      <div className="analysis-sections">
+                        {analysisSections.map((section) => (
+                          <section className="analysis-section" id={section.id} key={section.id}>
+                            <div className="section-anchor-row">
+                              <h3>{section.title}</h3>
+                              <a className="section-anchor" href={`#${section.id}`}>
+                                #{section.id.replace("analysis-section-", "S")}
+                              </a>
+                            </div>
+                            <div className="analysis-paragraphs">
+                              {section.lines.filter(Boolean).map((line, index) => (
+                                <p key={`${section.id}-${index}`}>
+                                  {renderLineWithRefs(line, section, setActiveRef)}
+                                </p>
+                              ))}
+                            </div>
+                          </section>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="empty">載入分析內容中...</div>
+                    )}
+                  </article>
+                </div>
+
+                {selectedRun ? (
+                  <aside className={`floating-reference${activeRef ? " open" : ""}`} aria-label="浮動補充視窗">
+                    <div className="floating-reference-head">
+                      <div>
+                        <div className="section-kicker">REFERENCE</div>
+                        <h2>浮動補充視窗</h2>
+                      </div>
+                      <button className="icon-button" type="button" onClick={() => setActiveRef(null)} aria-label="關閉補充視窗">
+                        <X size={18} aria-hidden="true" />
+                      </button>
+                    </div>
+                    {activeRef ? (
+                      <div className="reference-body">
+                        <div className="source-badge">{activeRef.sourceId}</div>
+                        <dl>
+                          <div>
+                            <dt>參照錨點</dt>
+                            <dd>{activeRef.label}</dd>
+                          </div>
+                          <div>
+                            <dt>段落</dt>
+                            <dd>第 {activeRef.paragraphNo} 段</dd>
+                          </div>
+                          <div>
+                            <dt>所在章節</dt>
+                            <dd>{activeRef.sectionTitle}</dd>
+                          </div>
+                        </dl>
+                      </div>
+                    ) : (
+                      <div className="reference-body muted">
+                        點選回覆中的來源標記，可在這裡保留參照資訊。
+                      </div>
+                    )}
+                  </aside>
+                ) : null}
 
                 {selectedRun?.citationReview ? (
                   <article className="reader-card analysis-response">
