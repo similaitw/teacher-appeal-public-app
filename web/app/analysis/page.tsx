@@ -12,7 +12,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { AuthMenu } from "../auth-menu";
 import type { PublicAnalysisIndex, PublicAnalysisRun, PublicSourceReference } from "../../lib/types";
@@ -180,6 +180,7 @@ export default function AnalysisPage() {
   const [selectedRunId, setSelectedRunId] = useState("");
   const [activeRef, setActiveRef] = useState<ActiveSourceRef | null>(null);
   const [showRunList, setShowRunList] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function loadIndex() {
@@ -187,8 +188,9 @@ export default function AnalysisPage() {
         const response = await fetch("/data/analysis/index.json");
         if (!response.ok) throw new Error("公開 AI 分析索引載入失敗");
         const index = (await response.json()) as PublicAnalysisIndex;
-        const initialRunId = selectedRunIdFromLocation() || index.runs[0]?.runId || "";
+        const initialRunId = selectedRunIdFromLocation();
         setSelectedRunId(initialRunId);
+        setShowRunList(!initialRunId);
         setState({ status: "ready", index, selectedRun: null });
       } catch (error) {
         setState({
@@ -222,6 +224,11 @@ export default function AnalysisPage() {
       cancelled = true;
     };
   }, [selectedRunId, state.status, state.status === "ready" ? state.index : null]);
+
+  useEffect(() => {
+    if (state.status !== "ready" || !showRunList || selectedRunId) return;
+    window.requestAnimationFrame(() => searchInputRef.current?.focus());
+  }, [selectedRunId, showRunList, state.status]);
 
   const filteredRuns = useMemo(() => {
     if (state.status !== "ready") return [];
@@ -316,6 +323,7 @@ export default function AnalysisPage() {
             <label className="field analysis-search">
               <FileText size={18} aria-hidden="true" />
               <input
+                ref={searchInputRef}
                 className="input with-icon"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -330,7 +338,10 @@ export default function AnalysisPage() {
                   className={`analysis-list-item${run.runId === selectedRunId ? " active" : ""}`}
                   key={run.runId}
                   type="button"
-                  onClick={() => setSelectedRunId(run.runId)}
+                  onClick={() => {
+                    setSelectedRunId(run.runId);
+                    setShowRunList(false);
+                  }}
                 >
                   <span className="analysis-item-meta">
                     {formatDate(run.analysisTime)} · {run.provider || "AI"}
@@ -467,7 +478,9 @@ export default function AnalysisPage() {
                 ) : null}
               </>
             ) : (
-              <div className="empty">尚無公開 AI 分析結果。</div>
+              <div className="empty analysis-start-card">
+                搜尋 run、案號或摘要後，選擇一筆公開 AI 分析結果開始閱讀。
+              </div>
             )}
           </section>
         </section>
