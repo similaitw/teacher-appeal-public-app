@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   BookOpenText,
   FileText,
-  ListTree,
   PanelLeftClose,
   PanelLeftOpen,
   ShieldCheck,
@@ -112,13 +111,6 @@ function parseAnalysisSections(text: string) {
   }
 
   return sections.length ? sections : [{ id: "analysis-section-1", title: "總覽", level: 1, lines: [text], sourceRefs: [] }];
-}
-
-function asciiLineForSection(section: AnalysisSection, index: number, count: number) {
-  const branch = index === count - 1 ? "`-" : "|-";
-  const indent = section.level > 1 ? "   " : "";
-  const refs = section.sourceRefs.length ? ` (${section.sourceRefs.length} refs)` : "";
-  return `${indent}${branch} ${section.title}  #${section.id}${refs}`;
 }
 
 function renderLineWithRefs(
@@ -384,28 +376,18 @@ export default function AnalysisPage() {
                 <div className="analysis-reading-grid">
                   <aside className="reader-card analysis-outline" aria-label="AI 回覆目錄">
                     <h2 className="panel-title">
-                      <ListTree size={17} aria-hidden="true" />
-                      ASCII 樹狀結構
+                      <Anchor size={17} aria-hidden="true" />
+                      章節錨點
                     </h2>
                     {selectedRun ? (
-                      <>
-                        <div className="ascii-tree" role="navigation" aria-label="AI 回覆 ASCII 樹狀錨點">
-                          <div className="ascii-tree-root">AI 回覆</div>
-                          {analysisSections.map((section, index) => (
-                            <a className="ascii-tree-link" href={`#${section.id}`} key={section.id}>
-                              {asciiLineForSection(section, index, analysisSections.length)}
-                            </a>
-                          ))}
-                        </div>
-                        <div className="anchor-list">
-                          {analysisSections.map((section) => (
-                            <a className="anchor-link" href={`#${section.id}`} key={section.id}>
-                              <Anchor size={14} aria-hidden="true" />
-                              {section.title}
-                            </a>
-                          ))}
-                        </div>
-                      </>
+                      <div className="anchor-list">
+                        {analysisSections.map((section) => (
+                          <a className="anchor-link" href={`#${section.id}`} key={section.id}>
+                            <Anchor size={14} aria-hidden="true" />
+                            {section.title}
+                          </a>
+                        ))}
+                      </div>
                     ) : (
                       <div className="empty compact">載入目錄中...</div>
                     )}

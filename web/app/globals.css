@@ -812,43 +812,6 @@ select {
   box-shadow: none;
 }
 
-.ascii-tree {
-  display: grid;
-  max-height: 360px;
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #f9fbf9;
-  color: #26362f;
-  font-family:
-    "Cascadia Mono",
-    "Consolas",
-    monospace;
-  font-size: 0.78rem;
-  line-height: 1.65;
-  margin: 0 0 12px;
-  padding: 12px;
-  white-space: pre;
-}
-
-.ascii-tree-root,
-.ascii-tree-link {
-  color: #26362f;
-  display: block;
-  min-height: 24px;
-  overflow-wrap: normal;
-}
-
-.ascii-tree-link {
-  border-radius: 4px;
-  padding: 1px 3px;
-}
-
-.ascii-tree-link:hover {
-  background: #eef6f3;
-  color: var(--accent-strong);
-}
-
 .anchor-list {
   display: grid;
   gap: 6px;
