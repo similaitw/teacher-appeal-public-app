@@ -174,41 +174,43 @@ export default function HomePage() {
       </header>
 
       <div className="container">
-        <section className="workspace-band" aria-label="線上工作台">
-          <div className="workspace-head">
-            <div>
-              <div className="section-kicker">ONLINE WORKSPACE</div>
-              <h1 className="workspace-title">線上工作台</h1>
+        {role !== "guest" ? (
+          <section className="workspace-band" aria-label="線上工作台">
+            <div className="workspace-head">
+              <div>
+                <div className="section-kicker">ONLINE WORKSPACE</div>
+                <h1 className="workspace-title">線上工作台</h1>
+              </div>
+              <div className="workspace-role">目前權限：{ROLE_LABELS[role]}</div>
             </div>
-            <div className="workspace-role">目前權限：{ROLE_LABELS[role]}</div>
-          </div>
-          <div className="workspace-grid">
-            {visibleModules.map((item) => {
-              const content = (
-                <>
-                  <div className={`module-status ${item.status}`}>
-                    {item.status === "online" ? "已上線" : "本機執行"}
+            <div className="workspace-grid">
+              {visibleModules.map((item) => {
+                const content = (
+                  <>
+                    <div className={`module-status ${item.status}`}>
+                      {item.status === "online" ? "已上線" : "本機執行"}
+                    </div>
+                    <h2>{item.title}</h2>
+                    <p>{item.detail}</p>
+                  </>
+                );
+                return item.href ? (
+                  <Link className="workspace-module workspace-module-link" href={item.href} key={item.title}>
+                    {content}
+                  </Link>
+                ) : (
+                  <div className="workspace-module" key={item.title}>
+                    {content}
                   </div>
-                  <h2>{item.title}</h2>
-                  <p>{item.detail}</p>
-                </>
-              );
-              return item.href ? (
-                <Link className="workspace-module workspace-module-link" href={item.href} key={item.title}>
-                  {content}
-                </Link>
-              ) : (
-                <div className="workspace-module" key={item.title}>
-                  {content}
-                </div>
-              );
-            })}
-          </div>
-          <div className="local-note">
-            <MonitorCog size={18} aria-hidden="true" />
-            分析執行、私人文件與瀏覽器自動化保留在本機；線上站提供公開資料、入口與狀態。
-          </div>
-        </section>
+                );
+              })}
+            </div>
+            <div className="local-note">
+              <MonitorCog size={18} aria-hidden="true" />
+              分析執行、私人文件與瀏覽器自動化保留在本機；線上站提供公開資料、入口與狀態。
+            </div>
+          </section>
+        ) : null}
 
         <section className="stats" aria-label="資料概況">
           <div className="stat">

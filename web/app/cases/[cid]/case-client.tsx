@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileText } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AuthMenu } from "../../auth-menu";
-import type { CaseRecord } from "../../../lib/types";
+import type { CaseRecord, PublicAnalysisIndex, PublicAnalysisIndexItem } from "../../../lib/types";
 
 type CaseState =
   | { status: "loading"; cid: string }
-  | { status: "ready"; record: CaseRecord }
+  | { status: "ready"; record: CaseRecord; analysisRuns: PublicAnalysisIndexItem[] }
   | { status: "missing"; cid: string };
 
 export default function CaseClient({ cid }: { cid: string }) {
@@ -18,13 +18,20 @@ export default function CaseClient({ cid }: { cid: string }) {
     async function loadCase() {
       setState({ status: "loading", cid });
       try {
-        const response = await fetch(`/data/cases/${cid}.json`);
-        if (!response.ok) {
+        const [caseResponse, analysisResponse] = await Promise.all([
+          fetch(`/data/cases/${cid}.json`),
+          fetch("/data/analysis/index.json"),
+        ]);
+        if (!caseResponse.ok) {
           setState({ status: "missing", cid });
           return;
         }
-        const record = (await response.json()) as CaseRecord;
-        setState({ status: "ready", record });
+        const record = (await caseResponse.json()) as CaseRecord;
+        const analysisIndex = analysisResponse.ok ? ((await analysisResponse.json()) as PublicAnalysisIndex) : null;
+        const analysisRuns = (analysisIndex?.runs || [])
+          .filter((run) => run.caseIds.includes(cid))
+          .sort((a, b) => String(b.analysisTime).localeCompare(String(a.analysisTime)));
+        setState({ status: "ready", record, analysisRuns });
       } catch {
         setState({ status: "missing", cid });
       }
@@ -50,7 +57,8 @@ export default function CaseClient({ cid }: { cid: string }) {
     );
   }
 
-  const { record } = state;
+  const { record, analysisRuns } = state;
+  const primaryAnalysis = analysisRuns[0];
 
   return (
     <main className="shell">
@@ -87,8 +95,31 @@ export default function CaseClient({ cid }: { cid: string }) {
                 原始頁面
               </a>
             ) : null}
+            {primaryAnalysis ? (
+              <Link className="button secondary" href={`/analysis?run=${encodeURIComponent(primaryAnalysis.runId)}`}>
+                <FileText size={17} aria-hidden="true" />
+                查看 AI 分析
+              </Link>
+            ) : null}
           </div>
         </div>
+
+        {analysisRuns.length ? (
+          <section className="reader-card related-analysis-card" aria-label="相關 AI 分析">
+            <div>
+              <h2 className="panel-title">相關 AI 分析</h2>
+              <p className="muted">此公開案件已有 {analysisRuns.length} 筆已保存分析結果。</p>
+            </div>
+            <div className="related-analysis-list">
+              {analysisRuns.slice(0, 5).map((run) => (
+                <Link className="related-analysis-link" href={`/analysis?run=${encodeURIComponent(run.runId)}`} key={run.runId}>
+                  <span>{run.runId}</span>
+                  <span>{run.provider || "AI"} · {run.modelName || "未記錄模型"}</span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <section className="reader-card">
           <div className="source-grid" aria-label="案件資訊">

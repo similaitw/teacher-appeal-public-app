@@ -609,6 +609,47 @@ select {
   min-width: 0;
 }
 
+.related-analysis-card {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 16px;
+  box-shadow: none;
+}
+
+.related-analysis-card p {
+  margin: 0;
+}
+
+.related-analysis-list {
+  display: grid;
+  gap: 8px;
+}
+
+.related-analysis-link {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.related-analysis-link:hover {
+  border-color: rgba(29, 111, 91, 0.45);
+  background: #f7faf8;
+}
+
+.related-analysis-link span:first-child {
+  color: var(--accent-strong);
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.related-analysis-link span:last-child {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
 .source-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
