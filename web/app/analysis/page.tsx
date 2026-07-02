@@ -114,16 +114,11 @@ function parseAnalysisSections(text: string) {
   return sections.length ? sections : [{ id: "analysis-section-1", title: "總覽", level: 1, lines: [text], sourceRefs: [] }];
 }
 
-function asciiTreeForSections(sections: AnalysisSection[]) {
-  if (!sections.length) return "AI 回覆";
-  const rows = ["AI 回覆"];
-  sections.forEach((section, index) => {
-    const branch = index === sections.length - 1 ? "`-" : "|-";
-    const indent = section.level > 1 ? "   " : "";
-    const refs = section.sourceRefs.length ? ` (${section.sourceRefs.length} refs)` : "";
-    rows.push(`${indent}${branch} ${section.title}  #${section.id}${refs}`);
-  });
-  return rows.join("\n");
+function asciiLineForSection(section: AnalysisSection, index: number, count: number) {
+  const branch = index === count - 1 ? "`-" : "|-";
+  const indent = section.level > 1 ? "   " : "";
+  const refs = section.sourceRefs.length ? ` (${section.sourceRefs.length} refs)` : "";
+  return `${indent}${branch} ${section.title}  #${section.id}${refs}`;
 }
 
 function renderLineWithRefs(
@@ -174,12 +169,18 @@ function selectedRunIdFromLocation() {
   return new URLSearchParams(window.location.search).get("run") || "";
 }
 
+function caseEntryFromLocation() {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get("case") || "";
+}
+
 export default function AnalysisPage() {
   const [state, setState] = useState<AnalysisState>({ status: "loading" });
   const [query, setQuery] = useState("");
   const [selectedRunId, setSelectedRunId] = useState("");
   const [activeRef, setActiveRef] = useState<ActiveSourceRef | null>(null);
   const [showRunList, setShowRunList] = useState(false);
+  const [caseEntryCid, setCaseEntryCid] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -189,8 +190,10 @@ export default function AnalysisPage() {
         if (!response.ok) throw new Error("公開 AI 分析索引載入失敗");
         const index = (await response.json()) as PublicAnalysisIndex;
         const initialRunId = selectedRunIdFromLocation();
+        const initialCaseEntry = caseEntryFromLocation();
         setSelectedRunId(initialRunId);
-        setShowRunList(!initialRunId);
+        setCaseEntryCid(initialCaseEntry);
+        setShowRunList(!initialRunId && !initialCaseEntry);
         setState({ status: "ready", index, selectedRun: null });
       } catch (error) {
         setState({
@@ -257,7 +260,7 @@ export default function AnalysisPage() {
     () => (selectedRun ? parseAnalysisSections(selectedRun.aiResponse) : []),
     [selectedRun],
   );
-  const asciiTree = useMemo(() => asciiTreeForSections(analysisSections), [analysisSections]);
+  const showRunControls = !caseEntryCid;
 
   if (state.status === "loading") {
     return <div className="loading">載入公開 AI 分析結果中...</div>;
@@ -305,7 +308,8 @@ export default function AnalysisPage() {
           </div>
         </section>
 
-        <section className={`analysis-layout${showRunList ? "" : " list-hidden"}`}>
+        <section className={`analysis-layout${showRunControls ? (showRunList ? "" : " list-hidden") : " no-run-list"}`}>
+          {showRunControls ? (
           <aside className={`analysis-list-panel${showRunList ? "" : " collapsed"}`} id="analysis-run-list" aria-label="公開分析清單">
             <div className="analysis-list-controls">
               {showRunList ? (
@@ -355,6 +359,7 @@ export default function AnalysisPage() {
               </div>
             ) : null}
           </aside>
+          ) : null}
 
           <section className="analysis-reader" aria-label="公開 AI 分析內容">
             {selectedIndexItem ? (
@@ -384,7 +389,14 @@ export default function AnalysisPage() {
                     </h2>
                     {selectedRun ? (
                       <>
-                        <pre className="ascii-tree">{asciiTree}</pre>
+                        <div className="ascii-tree" role="navigation" aria-label="AI 回覆 ASCII 樹狀錨點">
+                          <div className="ascii-tree-root">AI 回覆</div>
+                          {analysisSections.map((section, index) => (
+                            <a className="ascii-tree-link" href={`#${section.id}`} key={section.id}>
+                              {asciiLineForSection(section, index, analysisSections.length)}
+                            </a>
+                          ))}
+                        </div>
                         <div className="anchor-list">
                           {analysisSections.map((section) => (
                             <a className="anchor-link" href={`#${section.id}`} key={section.id}>

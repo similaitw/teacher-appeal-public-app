@@ -96,7 +96,7 @@ export default function CaseClient({ cid }: { cid: string }) {
               </a>
             ) : null}
             {primaryAnalysis ? (
-              <Link className="button secondary" href={`/analysis?run=${encodeURIComponent(primaryAnalysis.runId)}`}>
+              <Link className="button secondary" href={`/analysis?run=${encodeURIComponent(primaryAnalysis.runId)}&case=${encodeURIComponent(record.cid)}`}>
                 <FileText size={17} aria-hidden="true" />
                 查看 AI 分析
               </Link>
@@ -112,7 +112,7 @@ export default function CaseClient({ cid }: { cid: string }) {
             </div>
             <div className="related-analysis-list">
               {analysisRuns.slice(0, 5).map((run) => (
-                <Link className="related-analysis-link" href={`/analysis?run=${encodeURIComponent(run.runId)}`} key={run.runId}>
+                <Link className="related-analysis-link" href={`/analysis?run=${encodeURIComponent(run.runId)}&case=${encodeURIComponent(record.cid)}`} key={run.runId}>
                   <span>{run.runId}</span>
                   <span>{run.provider || "AI"} · {run.modelName || "未記錄模型"}</span>
                 </Link>
