@@ -2,8 +2,9 @@ name: Update public appeal cases
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 19 * * *"
+  # 自動排程已停用（每日 cron 一直失敗）；需要時請到 Actions 手動執行。
+  # schedule:
+  #   - cron: "0 19 * * *"
 
 permissions:
   contents: write
