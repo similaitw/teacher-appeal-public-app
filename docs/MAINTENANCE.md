@@ -47,8 +47,8 @@
 - [x] 把「公開 AI 分析包」搬到網站 `/package`，並以測試確認與 Python 版產出一致。
 - [x] 網站顯示資料最後成功更新日；建置不再寫死 324 筆。
 - [x] 公開 AI 分析可提交到 `data/public_analysis/runs/`，供自動部署使用。
-- [ ] 在存有 `data/ai_exports/` 的電腦執行 `cd web && npm run publish:analysis`，檢查並提交 `data/public_analysis/`，再 `python scripts/sync_repos.py --push`。
-- [ ] 在 Vercel 把專案連到公開庫（Root Directory：`web`），確認第一次自動部署的案件數與分析數。
+- [x] 匯出並提交 324 筆公開 AI 分析到 `data/public_analysis/`（與舊站的分析編號及內容指紋一致）。之後有新分析時：`cd web && npm run publish:analysis`，提交後同步。
+- [x] Vercel 專案連到公開庫（Root Directory：`web`），2026-11-12 新版上線：324 件案件、324 筆分析。CLI 手動部署須改從專案根目錄執行。
 - [ ] 在 Streamlit 公開版放「已搬到新網址」公告，一段時間後刪除 app。
 - [ ] 預設密碼曾出現在公開的程式與網站中；若其他地方也用同一組，請更換。
 

@@ -12,7 +12,7 @@
 | 測試 | `pytest` 全數通過（含雲端公開模式 smoke 與發布檔案政策測試） |
 | 私人主庫 | [teacher-appeal-local-ai](https://github.com/similaitw/teacher-appeal-local-ai)（唯一開發來源） |
 | 公開部署庫 | [teacher-appeal-public-app](https://github.com/similaitw/teacher-appeal-public-app)（鏡像私人主庫 main；Streamlit 公開版預計下架，見維護手冊「公開網站合併計畫」） |
-| 公開網站 | <https://teacher-appeal-public-app.vercel.app>（Next.js，`web/`）：搜尋、閱讀、AI 分析結果、AI 分析包。線上版本為 2026-07-02 部署，本次改版尚未上線 |
+| 公開網站 | <https://teacher-appeal-public-app.vercel.app>（Next.js，`web/`）：搜尋、閱讀、AI 分析結果、AI 分析包。公開庫 main 更新即自動部署；2026-11-12 上線 |
 
 ## 功能
 
