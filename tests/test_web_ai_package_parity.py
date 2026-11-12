@@ -5,8 +5,10 @@
 
 from __future__ import annotations
 
+import difflib
 import json
 import shutil
+from collections import Counter
 import subprocess
 import sys
 from pathlib import Path
@@ -74,6 +76,23 @@ def normalize(files: dict[str, str]) -> dict[str, str]:
     return {name: text if name.endswith(".csv") else text.replace("\r\n", "\n") for name, text in files.items()}
 
 
+def describe_mismatches(expected: dict[str, str], actual: dict[str, str]) -> str:
+    mismatched = [name for name in expected if actual.get(name) != expected[name]]
+    if not mismatched:
+        return ""
+    kinds = Counter(name.rsplit("/", 1)[-1] for name in mismatched)
+    first = mismatched[0]
+    diff = list(
+        difflib.unified_diff(
+            expected[first].splitlines(), actual.get(first, "").splitlines(), "python", "web", n=0, lineterm=""
+        )
+    )[:12]
+    return (
+        f"{len(mismatched)} 個檔案不一致，依檔名：{dict(kinds)}\n"
+        f"第一個：{first}\n" + "\n".join(repr(line) for line in diff)
+    )
+
+
 def all_cids() -> list[str]:
     return [row["cid"] for row in public_ai_export.load_public_cases()]
 
@@ -84,12 +103,14 @@ def test_every_public_case_matches_python_export(web_data, tmp_path, monkeypatch
     expected = normalize(python_bundle(cids, "single", tmp_path, monkeypatch))
     actual = normalize(web_bundle(cids, "single"))
     assert sorted(actual) == sorted(expected)
-    mismatched = [name for name in expected if actual[name] != expected[name]]
-    assert not mismatched, f"{len(mismatched)} 個檔案不一致，例如 {mismatched[:5]}"
+    problem = describe_mismatches(expected, actual)
+    assert not problem, problem
 
 
 def test_compare_mode_matches_python_export(web_data, tmp_path, monkeypatch):
     cids = all_cids()[:3]
     expected = normalize(python_bundle(cids, "compare", tmp_path, monkeypatch))
     actual = normalize(web_bundle(cids, "compare"))
-    assert actual == expected
+    assert sorted(actual) == sorted(expected)
+    problem = describe_mismatches(expected, actual)
+    assert not problem, problem

@@ -231,7 +231,8 @@ def manifest_for_case(row: dict[str, str], text_path: Path, paragraph_count: int
         "case_type": row.get("case_type", ""),
         "issue_type": row.get("issue_type", ""),
         "url": row.get("url", ""),
-        "source_text_path": str(text_path.relative_to(ROOT_DIR)) if text_path.is_relative_to(ROOT_DIR) else str(text_path),
+        # 一律用 / 分隔，Windows 與其他系統產出的資料包才會一致。
+        "source_text_path": text_path.relative_to(ROOT_DIR).as_posix() if text_path.is_relative_to(ROOT_DIR) else text_path.as_posix(),
         "paragraph_count": paragraph_count,
         "export_time": exported_at,
     }
