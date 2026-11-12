@@ -20,10 +20,20 @@ export type CaseRecord = Omit<CaseIndexItem, "excerpt" | "searchText"> & {
     html: string;
   };
   fullText: string;
+  packageMeta?: {
+    title: string;
+    date_text: string;
+    doc_no: string;
+    result: string;
+    case_type: string;
+    issue_type: string;
+    url: string;
+  };
 };
 
 export type Manifest = {
   generatedAt: string;
+  dataUpdatedAt?: string;
   caseCount: number;
   expectedCaseCount: number;
   source: string;

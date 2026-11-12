@@ -37,6 +37,8 @@ def test_public_files_allowed():
         "data/raw_html/114070228.html",
         "web/app/cases/[cid]/page.tsx",
         ".github/workflows/ci.yml",
+        "data/public_analysis/runs/20260619_140759_chatgpt_public_bundle.json",
+        "web/app/package/page.tsx",
     ]:
         assert is_allowed(path), path
         assert not is_forbidden(path), path
@@ -51,3 +53,9 @@ def test_unknown_files_flagged():
 def test_forbidden_wins_over_allowed():
     result = find_violations(["data/texts/.env"])
     assert result["forbidden"] == ["data/texts/.env"]
+
+
+def test_raw_ai_exports_stay_forbidden():
+    result = find_violations(["data/ai_exports/analysis_runs/run1/ai_response.md", "data/public_analysis/notes.txt"])
+    assert result["forbidden"] == ["data/ai_exports/analysis_runs/run1/ai_response.md"]
+    assert result["not_allowed"] == ["data/public_analysis/notes.txt"]

@@ -97,7 +97,11 @@ def read_secret_value(name: str) -> str:
 
 AUTH_USERS_PATH = ROOT_DIR / "data" / "auth_users.json"
 MODULE_PERMISSIONS_PATH = ROOT_DIR / "data" / "module_permissions.json"
-DEFAULT_APP_PASSWORD = read_secret_value("DEFAULT_APP_PASSWORD") or read_secret_value("APP_PASSWORD") or "simisimi520"
+CONFIGURED_APP_PASSWORD = read_secret_value("DEFAULT_APP_PASSWORD") or read_secret_value("APP_PASSWORD")
+DEFAULT_APP_PASSWORD = CONFIGURED_APP_PASSWORD or "simisimi520"
+# 內建預設密碼寫在公開的原始碼裡，不能拿來保護對外的雲端公開版。
+# 雲端公開版若沒有另外設定密碼（Secrets 的 DEFAULT_APP_PASSWORD），就停用登入，所有人都是訪客。
+LOGIN_ENABLED = bool(CONFIGURED_APP_PASSWORD) or not CLOUD_PUBLIC_MODE
 AUTH_ENABLED = read_secret_value("AUTH_DISABLED").lower() not in {"1", "true", "yes"}
 
 st.set_page_config(page_title="教師申訴評議書本機查詢系統", layout="wide")
@@ -999,6 +1003,8 @@ def find_auth_user(username: str) -> dict[str, object] | None:
 
 
 def current_user() -> dict[str, object] | None:
+    if not LOGIN_ENABLED:
+        return None
     user = st.session_state.get("auth_user")
     return user if isinstance(user, dict) else None
 
@@ -1013,6 +1019,10 @@ def current_access_level() -> str:
 def render_auth_panel() -> None:
     if not AUTH_ENABLED:
         st.warning("帳號登入已停用。")
+        return
+
+    if not LOGIN_ENABLED:
+        st.caption("公開版不需登入。")
         return
 
     user = current_user()
@@ -1036,7 +1046,7 @@ def render_auth_panel() -> None:
         return
 
     with st.popover("登入", use_container_width=True):
-        st.caption("預設帳號：admin / public / private；預設密碼：simisimi520")
+        st.caption("預設帳號：admin / public / private；預設密碼見 README，可用 DEFAULT_APP_PASSWORD 覆寫。")
         username = st.text_input("帳號", key="auth_username")
         password = st.text_input("密碼", type="password", key="auth_password")
         if st.button("登入", width="stretch"):
@@ -2576,5 +2586,5 @@ elif selected_page == "帳號管理":
                     st.rerun()
 
         st.markdown("**預設帳號**")
-        st.info("首次啟動會建立 admin / public / private，預設密碼皆為 simisimi520。正式遠端開放後，請先用 admin 登入並重設密碼。")
+        st.info("首次啟動會建立 admin / public / private，預設密碼見 README（可用 DEFAULT_APP_PASSWORD 覆寫）。對外開放前，請先用 admin 登入並重設密碼。")
 

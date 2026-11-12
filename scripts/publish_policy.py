@@ -46,6 +46,8 @@ ALLOWED_PATTERNS: tuple[str, ...] = (
     "data/failed_cids.txt",
     "data/raw_html/*.html",
     "data/texts/*.txt",
+    # 已過濾的公開 AI 分析（web 的 npm run publish:analysis 產生）；原始的 data/ai_exports/ 仍禁止。
+    "data/public_analysis/runs/*.json",
     # Next.js 公開前端原始碼（建置產物與資料由 .gitignore 排除）
     "web/.gitignore",
     "web/.vercelignore",

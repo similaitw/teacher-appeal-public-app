@@ -3,7 +3,6 @@
 import Link from "next/link";
 import {
   Anchor,
-  ArrowLeft,
   BookOpenText,
   FileText,
   PanelLeftClose,
@@ -13,7 +12,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import { AuthMenu } from "../auth-menu";
+import { SiteNav } from "../site-nav";
 import type { PublicAnalysisIndex, PublicAnalysisRun, PublicSourceReference } from "../../lib/types";
 
 type AnalysisState =
@@ -276,11 +275,7 @@ export default function AnalysisPage() {
             </div>
           </Link>
           <div className="topbar-actions">
-            <Link className="button secondary" href="/">
-              <ArrowLeft size={17} aria-hidden="true" />
-              回查詢
-            </Link>
-            <AuthMenu />
+            <SiteNav current="analysis" />
           </div>
         </div>
       </header>

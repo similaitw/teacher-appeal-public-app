@@ -28,7 +28,8 @@
 2. 執行 `python -m pytest -q`、`python -m py_compile scripts/*.py app/streamlit_app.py`、`python scripts/health_check.py --skip-ai`。
 3. 執行 `python scripts/sync_repos.py` 檢查兩個 remote 與資料一致性。腳本會以 `scripts/publish_policy.py` 的允許清單與禁止清單檢查 `git ls-files`（也可單獨執行 `python scripts/check_publish_files.py`）；新增檔案類型被擋下時，確認可公開後再加入允許清單，不要放寬禁止清單。
 4. 提交主庫；測試通過且公開檔案清單核對完成後，執行 `python scripts/sync_repos.py --push`。此腳本目前要求兩邊 main 沒有額外提交；若任何一邊領先，先人工檢查差異，勿強推。
-5. 確認公開 Streamlit 顯示新增版本、搜尋及案件閱讀可用。若 Vercel 前端已連接，另執行 `cd web && npm ci && npm run check:data && npm run build`，檢查正式網址與資料筆數。
+5. 有新的公開 AI 分析時，先執行 `cd web && npm run publish:analysis` 並提交 `data/public_analysis/`。
+6. 部署前執行 `cd web && npm ci && npm run check:data && npm run build`；上線後檢查正式網址的案件數、分析數與「資料更新」日期。
 
 ## 維護週期
 
@@ -38,13 +39,24 @@
 | 每次程式更新 | 測試、公開資料一致性、禁傳檔案、兩庫提交 | 不同步、不部署 |
 | 每月 | 兩庫 main、公開權限與祕密設定、Streamlit/Vercel 正式入口 | 修正差異與文件，再發布 |
 
+## 公開網站合併計畫（2026-11-12 決定）
+
+目標：只留 Vercel 網站當公開入口，Streamlit 只在本機當私人工作台；Vercel 連公開庫自動部署。
+
+- [x] 移除 Vercel 網站的假登入（密碼寫死在前端）；Streamlit 雲端公開版未在 Secrets 設定 `DEFAULT_APP_PASSWORD` 時停用登入。
+- [x] 把「公開 AI 分析包」搬到網站 `/package`，並以測試確認與 Python 版產出一致。
+- [x] 網站顯示資料最後成功更新日；建置不再寫死 324 筆。
+- [x] 公開 AI 分析可提交到 `data/public_analysis/runs/`，供自動部署使用。
+- [ ] 在存有 `data/ai_exports/` 的電腦執行 `cd web && npm run publish:analysis`，檢查並提交 `data/public_analysis/`，再 `python scripts/sync_repos.py --push`。
+- [ ] 在 Vercel 把專案連到公開庫（Root Directory：`web`），確認第一次自動部署的案件數與分析數。
+- [ ] 在 Streamlit 公開版放「已搬到新網址」公告，一段時間後刪除 app。
+- [ ] 預設密碼曾出現在公開的程式與網站中；若其他地方也用同一組，請更換。
+
 ## 待完成事項
 
 - [ ] 在臺灣可連線教育部站台的本機恢復資料更新（README「Windows 工作排程範例」），以少量 CID 測試後再全量更新。
 - [x] 改為單一排程，停用另一庫的重複爬蟲。（2026-11-12：兩庫排程皆停用）
 - [x] 驗證公開版不會讀取私人資料；建立發布檔案允許清單。（`scripts/publish_policy.py`、`tests/test_cloud_public_smoke.py`）
 - [x] 更新過時的 `STATUS.md` 與部署說明。
-- [x] 確認 Vercel 專案、正式網址、root directory 與部署狀態。（未連 GitHub，CLI 部署）
+- [x] 確認 Vercel 專案、正式網址、root directory 與部署狀態。
 - [x] 完成 Vercel 公開功能及資料筆數 smoke test。（2026-11-12：首頁 200、manifest 324 筆）
-- [ ] 在 Streamlit Community Cloud 確認公開入口網址與可用性，並記入本表。
-- [ ] 資料更新恢復後，重新部署 Vercel（`cd web && npx vercel --prod`），並在公開介面標示最後成功更新時間。

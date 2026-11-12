@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, FileText } from "lucide-react";
 import { useEffect, useState } from "react";
-import { AuthMenu } from "../../auth-menu";
+import { SiteNav } from "../../site-nav";
 import type { CaseRecord, PublicAnalysisIndex, PublicAnalysisIndexItem } from "../../../lib/types";
 
 type CaseState =
@@ -71,11 +71,7 @@ export default function CaseClient({ cid }: { cid: string }) {
             </div>
           </div>
           <div className="topbar-actions">
-            <AuthMenu />
-            <Link className="button secondary" href="/">
-              <ArrowLeft size={17} aria-hidden="true" />
-              回查詢頁
-            </Link>
+            <SiteNav />
           </div>
         </div>
       </header>

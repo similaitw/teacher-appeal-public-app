@@ -363,7 +363,7 @@ http://localhost:8501
 
 ### 遠端操作與帳號權限
 
-Streamlit 工作台支援同一網址的帳號與角色權限。所有人使用同一個工作台網址，右上角提供「登入」或「帳號與權限」；管理者登入後可使用完整功能，並可在「帳號管理」調整每個模組要開放給哪些角色。首次啟動會建立 `admin`、`public`、`private` 三個帳號；預設密碼可用 `DEFAULT_APP_PASSWORD` 覆寫，若未設定則使用 `APP_PASSWORD`，最後才使用 `simisimi520`。正式遠端開放後，請先用 `admin` 登入右上角「帳號與權限」，到「帳號管理」重設密碼。
+Streamlit 工作台支援同一網址的帳號與角色權限。所有人使用同一個工作台網址，右上角提供「登入」或「帳號與權限」；管理者登入後可使用完整功能，並可在「帳號管理」調整每個模組要開放給哪些角色。首次啟動會建立 `admin`、`public`、`private` 三個帳號；預設密碼可用 `DEFAULT_APP_PASSWORD` 覆寫，若未設定則使用 `APP_PASSWORD`，最後才使用 `simisimi520`。正式遠端開放後，請先用 `admin` 登入右上角「帳號與權限」，到「帳號管理」重設密碼。雲端公開模式（`APP_MODE=cloud_public`）若沒有設定 `DEFAULT_APP_PASSWORD` 或 `APP_PASSWORD`，登入功能會停用，所有人都是訪客，不接受上述內建預設密碼。
 
 角色權限：
 
