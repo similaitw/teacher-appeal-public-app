@@ -28,6 +28,7 @@ ALLOWED_PATTERNS: tuple[str, ...] = (
     "packages.txt",
     "requirements.txt",
     "requirements-cloud.txt",
+    "update_and_publish.bat",
     ".streamlit/config.toml",
     ".github/workflows/*.yml",
     # 程式、測試、提示詞與寫作規則

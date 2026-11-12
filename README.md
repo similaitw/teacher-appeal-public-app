@@ -22,6 +22,10 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## 一鍵更新並發布公開網站
+
+在可連線教育部站台的電腦上，雙擊 `update_and_publish.bat`，或執行 `python scripts/update_and_publish.py`。會依序抓新資料、匯出公開 AI 分析、檢查、確認後同步到兩個 repo，網站自動部署。詳見 `docs/MAINTENANCE.md`「一鍵更新與發布」。
+
 ## 抓資料
 
 下載單一 cid：

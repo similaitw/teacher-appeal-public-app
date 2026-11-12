@@ -22,6 +22,31 @@
 4. 在解決連線前，保留現有資料並在公開介面標示最後成功更新時間；不宣稱每日更新。
 5. 不繞過網站存取限制，不把 SSL 驗證關閉當成網路不通的解法。
 
+## 一鍵更新與發布
+
+在可連線教育部站台的電腦（臺灣）上，雙擊專案根目錄的 `update_and_publish.bat`，或執行：
+
+```bash
+python scripts/update_and_publish.py
+```
+
+它會依序：檢查 repo 狀態並取得最新版本 → 跑爬蟲 → 匯出公開 AI 分析 → 跑測試與資料檢查 → 顯示變更摘要並詢問 → 提交並同步兩個 repo。公開庫更新後 Vercel 會自動部署。任何一步失敗都會停下來，不會提交或推送；沒有新資料就直接結束。
+
+常用選項：
+
+| 選項 | 用途 |
+| --- | --- |
+| `--skip-crawl` | 不跑爬蟲，只發布新的 AI 分析 |
+| `--no-push` | 只更新與檢查，不提交（變更留在工作樹，下次執行會接續） |
+| `--limit 3` | 爬蟲只抓 3 件，小量測試 |
+| `--yes` | 不詢問直接發布（排程用） |
+
+排程範例（Windows，每週一早上 7 點）：
+
+```powershell
+schtasks /Create /TN "TeacherAppealPublish" /SC WEEKLY /D MON /ST 07:00 /TR "H:\AI_Project\teacher-appeal-local-ai\.venv\Scripts\python.exe H:\AI_Project\teacher-appeal-local-ai\scripts\update_and_publish.py --yes"
+```
+
 ## 發布流程
 
 1. 在私人主庫修改，確認 `AGENTS.md`、測試與公開資料用途。
@@ -54,7 +79,7 @@
 
 ## 待完成事項
 
-- [ ] 在臺灣可連線教育部站台的本機恢復資料更新（README「Windows 工作排程範例」），以少量 CID 測試後再全量更新。
+- [ ] 在臺灣可連線教育部站台的本機恢復資料更新：先跑 `python scripts/update_and_publish.py --limit 3 --no-push` 小量測試，再正式執行或設定排程（見「一鍵更新與發布」）。
 - [x] 改為單一排程，停用另一庫的重複爬蟲。（2026-11-12：兩庫排程皆停用）
 - [x] 驗證公開版不會讀取私人資料；建立發布檔案允許清單。（`scripts/publish_policy.py`、`tests/test_cloud_public_smoke.py`）
 - [x] 更新過時的 `STATUS.md` 與部署說明。
