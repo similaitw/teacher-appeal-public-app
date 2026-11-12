@@ -1,6 +1,6 @@
 # 教師申訴評議書專案維護手冊
 
-更新：2026-09-23
+更新：2026-11-12
 
 ## 儲存庫與發布責任
 
@@ -8,9 +8,9 @@
 | --- | --- | --- |
 | [teacher-appeal-local-ai](https://github.com/similaitw/teacher-appeal-local-ai)（私人） | 原始碼、測試、本機工作台與公開資料建置 | 唯一開發來源；私人案件資料只存本機，絕不提交 |
 | [teacher-appeal-public-app](https://github.com/similaitw/teacher-appeal-public-app)（公開） | Streamlit 公開部署 | 只發布通過驗證的公開程式與資料，不直接開發 |
-| `web/` | Next.js/Vercel 公開前端 | 與 Streamlit 為不同入口，正式網址及部署連結待確認 |
+| `web/` | Next.js/Vercel 公開前端，正式網址 <https://teacher-appeal-public-app.vercel.app> | Vercel 專案 `teacher-appeal-public-app`（root：`web`），以 CLI 從本機部署、未連 GitHub，因 AI 分析資料只存在本機 `data/ai_exports/` |
 
-截至 2026-09-23，兩庫 main 同為 `a3218eef8aa5e811a1f2160cb1cd519757c6a399`，程式及公開資料仍是鏡像。公開資料集文件記載 324 筆；新資料更新尚未恢復。
+截至 2026-11-12，公開庫 main 由私人主庫快轉同步，兩庫仍是鏡像。公開資料集 324 筆，最後成功更新 2026-06-26；新資料更新尚未恢復。
 
 ## 已知故障與處置
 
@@ -18,7 +18,7 @@
 
 1. 從可連線的環境確認教育部站台與查詢流程，再以少量 CID 測試更新。
 2. 更新結果通過 CSV、HTML、TXT、downloaded CID、SQLite 與 FTS 一致性檢查後才提交。
-3. 確立單一排程：只在可連線的環境執行爬蟲；公開庫停止獨立抓取，僅接收已驗證資料。
+3. 確立單一排程：只在可連線的環境執行爬蟲；公開庫停止獨立抓取，僅接收已驗證資料。（2026-11-12：兩庫的 GitHub 排程皆已註解停用，只保留手動 `workflow_dispatch`。）
 4. 在解決連線前，保留現有資料並在公開介面標示最後成功更新時間；不宣稱每日更新。
 5. 不繞過網站存取限制，不把 SSL 驗證關閉當成網路不通的解法。
 
@@ -26,7 +26,7 @@
 
 1. 在私人主庫修改，確認 `AGENTS.md`、測試與公開資料用途。
 2. 執行 `python -m pytest -q`、`python -m py_compile scripts/*.py app/streamlit_app.py`、`python scripts/health_check.py --skip-ai`。
-3. 執行 `python scripts/sync_repos.py` 檢查兩個 remote 與資料一致性。同步前逐項檢查 `git ls-files`，確保 `.env`、secrets、私人案件、上傳原檔、瀏覽器 profile、AI 分析輸出均未被追蹤。
+3. 執行 `python scripts/sync_repos.py` 檢查兩個 remote 與資料一致性。腳本會以 `scripts/publish_policy.py` 的允許清單與禁止清單檢查 `git ls-files`（也可單獨執行 `python scripts/check_publish_files.py`）；新增檔案類型被擋下時，確認可公開後再加入允許清單，不要放寬禁止清單。
 4. 提交主庫；測試通過且公開檔案清單核對完成後，執行 `python scripts/sync_repos.py --push`。此腳本目前要求兩邊 main 沒有額外提交；若任何一邊領先，先人工檢查差異，勿強推。
 5. 確認公開 Streamlit 顯示新增版本、搜尋及案件閱讀可用。若 Vercel 前端已連接，另執行 `cd web && npm ci && npm run check:data && npm run build`，檢查正式網址與資料筆數。
 
@@ -40,9 +40,11 @@
 
 ## 待完成事項
 
-- [ ] 確認可連線教育部站台的更新環境與最後成功更新日。
-- [ ] 改為單一排程，停用另一庫的重複爬蟲。
-- [ ] 驗證公開版不會讀取私人資料；建立發布檔案允許清單。
-- [ ] 更新過時的 `STATUS.md` 與部署說明。
-- [ ] 確認 Vercel 專案、正式網址、GitHub 來源、root directory 與部署狀態。
-- [ ] 完成 Streamlit 與 Vercel 的公開功能及資料筆數 smoke test。
+- [ ] 在臺灣可連線教育部站台的本機恢復資料更新（README「Windows 工作排程範例」），以少量 CID 測試後再全量更新。
+- [x] 改為單一排程，停用另一庫的重複爬蟲。（2026-11-12：兩庫排程皆停用）
+- [x] 驗證公開版不會讀取私人資料；建立發布檔案允許清單。（`scripts/publish_policy.py`、`tests/test_cloud_public_smoke.py`）
+- [x] 更新過時的 `STATUS.md` 與部署說明。
+- [x] 確認 Vercel 專案、正式網址、root directory 與部署狀態。（未連 GitHub，CLI 部署）
+- [x] 完成 Vercel 公開功能及資料筆數 smoke test。（2026-11-12：首頁 200、manifest 324 筆）
+- [ ] 在 Streamlit Community Cloud 確認公開入口網址與可用性，並記入本表。
+- [ ] 資料更新恢復後，重新部署 Vercel（`cd web && npx vercel --prod`），並在公開介面標示最後成功更新時間。

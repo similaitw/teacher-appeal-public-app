@@ -7,22 +7,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from publish_policy import find_violations  # noqa: E402
+
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 PRIVATE_REMOTE = "origin"
 PUBLIC_REMOTE = "public-deploy"
 BRANCH = "main"
-FORBIDDEN_TRACKED_PATTERNS = (
-    ".env",
-    "secrets.toml",
-    "private_cases.db",
-    "uploaded_cases/",
-    "browser_profiles/",
-    "data/ai_exports/",
-    "data/exports/",
-    ".venv/",
-    "__pycache__/",
-)
 
 
 def run(command: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -59,14 +51,18 @@ def ensure_branch() -> None:
 
 def ensure_no_forbidden_tracked_files() -> None:
     result = run(["git", "ls-files"])
-    files = result.stdout.splitlines()
-    forbidden = [
-        path
-        for path in files
-        if any(path == pattern or path.startswith(f"{pattern}/") or f"/{pattern}/" in path for pattern in FORBIDDEN_TRACKED_PATTERNS)
-    ]
-    if forbidden:
-        raise SystemExit("追蹤清單含不得上傳檔案：\n" + "\n".join(forbidden))
+    violations = find_violations(result.stdout.splitlines())
+    messages = []
+    if violations["forbidden"]:
+        messages.append("追蹤清單含不得上傳檔案：\n" + "\n".join(violations["forbidden"]))
+    if violations["not_allowed"]:
+        messages.append(
+            "追蹤清單含未列入公開允許清單的檔案（確認可公開後加入 scripts/publish_policy.py）：\n"
+            + "\n".join(violations["not_allowed"])
+        )
+    if messages:
+        raise SystemExit("\n\n".join(messages))
+    print("公開檔案清單檢查通過")
 
 
 def ensure_public_data_consistency() -> None:

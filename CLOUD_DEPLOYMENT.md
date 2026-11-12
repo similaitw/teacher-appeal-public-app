@@ -69,7 +69,7 @@ APP_MODE = "cloud_public"
 3. 重建 `data/appeal_cases.db`。
 4. 若公開資料有變更，自動 commit。
 
-可在 GitHub Actions 頁面手動執行，也會依排程每日執行。
+目前只保留手動執行（Actions → Update public appeal cases → Run workflow）。2026-11-12 起已停用每日排程：GitHub 雲端主機連不到教育部站台（`Network is unreachable`），排程只會失敗。日常更新請在可連線教育部站台的本機執行（見 README「Windows 工作排程範例」），驗證後再提交與同步。
 
 ## 不要提交到雲端的資料
 

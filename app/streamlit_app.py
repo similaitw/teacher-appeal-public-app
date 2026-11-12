@@ -1317,14 +1317,14 @@ elif selected_page == "資料管理":
     d1, d2 = st.columns(2)
     with d1:
         sleep_seconds = st.number_input("下載間隔秒數", min_value=0.0, max_value=10.0, value=1.5, step=0.5)
-        if st.button("下載上方 cid 並更新 CSV", disabled=(not cids) or not private_data_unlocked):
+        if st.button("下載上方 cid 並更新 CSV", disabled=CLOUD_PUBLIC_MODE or (not cids) or not private_data_unlocked):
             EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
             temp_cids = EXPORTS_DIR / "streamlit_cids.txt"
             temp_cids.write_text("\n".join(cids) + "\n", encoding="utf-8")
             ok, output = run_command([sys.executable, "scripts/crawl_appeal.py", "--cid-file", str(temp_cids), "--sleep", str(sleep_seconds)], timeout=1800)
             st.success(output) if ok else st.error(output)
     with d2:
-        if st.button("重建 SQLite 資料庫", disabled=not private_data_unlocked):
+        if st.button("重建 SQLite 資料庫", disabled=CLOUD_PUBLIC_MODE or not private_data_unlocked):
             ok, output = run_command([sys.executable, "scripts/build_db.py"])
             st.success(output) if ok else st.error(output)
     st.markdown("**目前資料檔**")
@@ -1333,7 +1333,7 @@ elif selected_page == "資料管理":
         ("appeal_cases.db", DB_PATH),
         ("crawl_errors.log", ERROR_LOG),
     ]
-    if private_data_unlocked:
+    if private_data_unlocked and not CLOUD_PUBLIC_MODE:
         files.insert(2, ("private_cases.db", PRIVATE_DB_PATH))
     st.dataframe(pd.DataFrame([{"檔案": name, "存在": path.exists(), "大小": path.stat().st_size if path.exists() else 0} for name, path in files]), hide_index=True)
 

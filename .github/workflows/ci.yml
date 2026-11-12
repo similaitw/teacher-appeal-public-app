@@ -31,6 +31,10 @@ jobs:
         run: |
           python -m py_compile scripts/*.py app/streamlit_app.py
 
+      - name: Check publishable file list
+        run: |
+          python scripts/check_publish_files.py
+
       - name: Run tests
         run: |
           python -m pytest -q
@@ -62,3 +66,28 @@ jobs:
           assert db_count == fts_count == len(case_cids)
           print(f"public_cases={len(case_cids)}")
           PY
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check exported data
+        run: npm run check:data
+
+      - name: Build
+        run: npm run build
